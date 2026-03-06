@@ -14,7 +14,9 @@ except Exception as e:
     print(f"Failed to initialize AI Platform: {e}")
     model = None
 
-def analyze_post_content(content: str) -> dict:
+from typing import Optional
+
+def analyze_post_content(content: str, place_name: Optional[str] = None, place_category: Optional[str] = None) -> dict:
     """
     Analyzes the post text to:
     1. Check for safety flags.
@@ -24,11 +26,17 @@ def analyze_post_content(content: str) -> dict:
     if not model:
         return {"is_safe": True, "cta_text": None, "cta_action": None}
     
+    context_str = ""
+    if place_name or place_category:
+        context_str = f"This AR post was physically pinned to a building/location: {place_name or 'Unknown'} (Category: {place_category or 'Unknown'}). "
+    
     prompt = f"""
     Analyze the following user-generated AR post content.
+    {context_str}
+    
     Provide a JSON response with three keys:
     1. "is_safe": boolean. False if the content is highly offensive, illegal, or violates typical community standards. True otherwise.
-    2. "cta_text": string. A 1 to 3 word suggested button text (e.g., "Call Now", "Get Directions", "Buy Tickets"). If no CTA makes sense, return null.
+    2. "cta_text": string. A 1 to 3 word suggested button text (e.g., "Call Now", "Get Directions", "Buy Tickets", "Message Resident", "Make Reservation"). If no CTA makes sense, return null. The suggested CTA should be highly contextual to both the message content and the location it is pinned to.
     3. "cta_action": string. The type of action: "phone", "url", "directions", "none". If no CTA, return "none".
     
     Post content: "{content}"

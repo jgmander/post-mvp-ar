@@ -10,6 +10,8 @@ class PostCreate(BaseModel):
     creator_id: str
     visibility_type: Literal["1-to-1", "1-to-many"]
     reach: int = Field(default=0, description="The intended reach distance or amount")
+    place_name: Optional[str] = None
+    place_category: Optional[str] = None
 
 class PostResponse(PostCreate):
     id: str

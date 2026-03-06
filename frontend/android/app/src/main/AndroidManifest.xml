@@ -38,7 +38,7 @@
             android:name="flutterEmbedding"
             android:value="2" />
         <meta-data android:name="com.google.ar.core" android:value="required" tools:replace="android:value" />
-        <meta-data android:name="com.google.android.ar.API_KEY" android:value="AIzaSyDos1-Qi6u61x4im7B161B4Bmh2Tf5dU_8" />
+        <meta-data android:name="com.google.android.ar.API_KEY" android:value="\${MAPS_API_KEY}" />
         <meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:

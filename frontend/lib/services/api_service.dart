@@ -49,4 +49,62 @@ class ApiService {
       throw Exception('Failed to load posts');
     }
   }
+
+  String? _cachedMapsApiKey;
+
+  Future<Map<String, String>?> getPlaceFromCoordinates(double lat, double lng) async {
+    if (_cachedMapsApiKey == null) {
+      try {
+        final configResponse = await http.get(Uri.parse('\$baseUrl/v1/auth/config'));
+        if (configResponse.statusCode == 200) {
+          final data = jsonDecode(configResponse.body);
+          _cachedMapsApiKey = data['maps_api_key'];
+        }
+      } catch (e) {
+        print("Network error fetching auth config: \$e");
+      }
+    }
+    
+    if (_cachedMapsApiKey == null || _cachedMapsApiKey!.isEmpty) {
+        print("WARNING: MAPS_API_KEY could not be securely fetched from backend.");
+        return null;
+    }
+
+    // First try Places API to get a specific business/poi name
+    try {
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=\$lat,\$lng&radius=15&key=\$_cachedMapsApiKey';
+      final placesResponse = await http.get(Uri.parse(placesUrl));
+      if (placesResponse.statusCode == 200) {
+        final data = jsonDecode(placesResponse.body);
+        if (data['results'] != null && data['results'].isNotEmpty) {
+          final firstResult = data['results'][0];
+          String name = firstResult['name'] ?? 'Unknown Place';
+          String category = 'Unknown';
+          if (firstResult['types'] != null && (firstResult['types'] as List).isNotEmpty) {
+            category = firstResult['types'][0].toString().replaceAll('_', ' ');
+          }
+          return {'name': name, 'category': category};
+        }
+      }
+      
+      // Fallback to Reverse Geocoding for physical addresses
+      final geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json?latlng=\$lat,\$lng&key=\$_cachedMapsApiKey';
+      final geocodeResponse = await http.get(Uri.parse(geocodeUrl));
+      if (geocodeResponse.statusCode == 200) {
+        final data = jsonDecode(geocodeResponse.body);
+        if (data['results'] != null && data['results'].isNotEmpty) {
+           final firstResult = data['results'][0];
+           String address = firstResult['formatted_address'] ?? 'Unknown Address';
+           String category = 'address';
+           if (firstResult['types'] != null && (firstResult['types'] as List).isNotEmpty) {
+             category = firstResult['types'][0].toString().replaceAll('_', ' ');
+           }
+           return {'name': address, 'category': category};
+        }
+      }
+    } catch (e) {
+      print('Failed to resolve coordinates: \$e');
+    }
+    return null;
+  }
 }

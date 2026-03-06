@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -9,6 +12,29 @@ android {
     namespace = "com.dbomar.post.frontend"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
+
+    val localProperties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { stream ->
+            localProperties.load(stream)
+        }
+    }
+
+    // Extract variables passed via --dart-define
+    val dartEnvironmentVariables = mutableMapOf<String, String>()
+    if (project.hasProperty("dart-defines")) {
+        val dartDefines = project.property("dart-defines") as String
+        dartDefines.split(",").forEach {
+            val decoded = String(java.util.Base64.getDecoder().decode(it))
+            val parts = decoded.split("=")
+            if (parts.size == 2) {
+                dartEnvironmentVariables[parts[0]] = parts[1]
+            }
+        }
+    }
+
+    val mapsApiKey = dartEnvironmentVariables["MAPS_API_KEY"] ?: localProperties.getProperty("MAPS_API_KEY") ?: ""
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -28,6 +54,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {

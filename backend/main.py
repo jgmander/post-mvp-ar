@@ -10,10 +10,19 @@ app = FastAPI(title="Post AR MVP Backend")
 def read_root():
     return {"status": "ok", "service": "post-mvp-backend"}
 
+@app.get("/v1/auth/config")
+def get_auth_config():
+    from services.secret_service import get_prod_keys
+    keys = get_prod_keys()
+    if "MAPS_API_KEY" not in keys:
+        raise HTTPException(status_code=500, detail="Missing secure keys")
+    # In a full app, this would be obfuscated or session-limited
+    return {"maps_api_key": keys["MAPS_API_KEY"]}
+
 @app.post("/posts", response_model=PostResponse)
 def api_create_post(post: PostCreate):
     # 1. Analyze with AI
-    analysis = analyze_post_content(post.message_content)
+    analysis = analyze_post_content(post.message_content, post.place_name, post.place_category)
     
     if not analysis.get("is_safe", True):
         raise HTTPException(status_code=400, detail="Content flagged by safety moderation.")

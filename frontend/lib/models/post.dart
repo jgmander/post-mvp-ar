@@ -11,6 +11,8 @@ class Post {
   final String? ctaText;
   final String? ctaAction;
   final bool isSafe;
+  final String? placeName;
+  final String? placeCategory;
 
   Post({
     this.id,
@@ -25,6 +27,8 @@ class Post {
     this.ctaText,
     this.ctaAction,
     this.isSafe = true,
+    this.placeName,
+    this.placeCategory,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,8 @@ class Post {
       ctaText: json['cta_text'],
       ctaAction: json['cta_action'],
       isSafe: json['is_safe'] ?? true,
+      placeName: json['place_name'],
+      placeCategory: json['place_category'],
     );
   }
 
@@ -53,6 +59,8 @@ class Post {
       'creator_id': creatorId,
       'visibility_type': visibilityType,
       'reach': reach,
+      'place_name': placeName,
+      'place_category': placeCategory,
     };
   }
 }

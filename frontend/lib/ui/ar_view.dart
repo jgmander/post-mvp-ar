@@ -21,6 +21,7 @@ class _ArViewState extends State<ArView> {
   Set<String> _renderedPostIds = {};
   Timer? _vpsTimer;
   Map<String, dynamic>? _currentPose;
+  bool _isAuraTargetingBuilding = false;
 
   @override
   void initState() {
@@ -107,12 +108,30 @@ class _ArViewState extends State<ArView> {
     arCoreController = controller;
     arCoreController.onNodeTap = (name) => _handleOnNodeTap(name);
     arCoreController.onPlaneTap = _handleOnPlaneTap;
+    arCoreController.onRooftopAnchorResolved = _handleRooftopAnchorResolved;
+    arCoreController.onCenterHitBuilding = _handleCenterHitBuilding;
     _arCoreInitialized = true;
     
     // Resume immediately to fix black screen bug where Android misses the onResume hook.
     arCoreController.resume();
     
     _renderPosts();
+  }
+
+  void _handleCenterHitBuilding(bool isBuilding) {
+    if (_isAuraTargetingBuilding != isBuilding && mounted) {
+      setState(() {
+        _isAuraTargetingBuilding = isBuilding;
+      });
+    }
+  }
+
+  void _handleRooftopAnchorResolved(String name, bool success, String? state) {
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✨ Precision Rooftop Anchor Locked!')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rooftop Anchor failed: \$state. Make sure you are pointing at a building.')));
+    }
   }
 
   void _handleOnNodeTap(String name) {
@@ -160,7 +179,7 @@ class _ArViewState extends State<ArView> {
     }
   }
 
-  void _handleOnPlaneTap(List<ArCoreHitTestResult> hits) {
+  void _handleOnPlaneTap(List<ArCoreHitTestResult> hits) async {
     if (hits.isNotEmpty) {
       final hit = hits.first;
       
@@ -170,11 +189,22 @@ class _ArViewState extends State<ArView> {
         return;
       }
 
-      _showCreatePostBottomSheet(hit.pose.translation);
+      String placeName = "Unknown Location";
+      String placeCategory = "Unknown";
+      
+      if (hit.hitLat != null && hit.hitLng != null) {
+         final placeData = await _apiService.getPlaceFromCoordinates(hit.hitLat!, hit.hitLng!);
+         if (placeData != null) {
+            placeName = placeData['name'] ?? placeName;
+            placeCategory = placeData['category'] ?? placeCategory;
+         }
+      }
+
+      _showCreatePostBottomSheet(hit, placeName, placeCategory);
     }
   }
 
-  void _showCreatePostBottomSheet(vector.Vector3 localPosition) {
+  void _showCreatePostBottomSheet(ArCoreHitTestResult hit, String placeName, String placeCategory) {
     final _contentController = TextEditingController();
     String _visibilityType = '1-to-many';
     bool _isSubmitting = false;
@@ -197,7 +227,7 @@ class _ArViewState extends State<ArView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("Pin a New Post", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  Text("Pin to: \$placeName", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blueAccent), textAlign: TextAlign.center),
                   SizedBox(height: 20),
                   TextField(
                     controller: _contentController,
@@ -233,10 +263,10 @@ class _ArViewState extends State<ArView> {
                             setModalState(() => _isSubmitting = true);
                             
                             try {
-                              // Use the ARCore Earth API's exact lat/lng instead of rough Geolocator
-                              final lat = _currentPose!['latitude'] as double;
-                              final lng = _currentPose!['longitude'] as double;
-                              final alt = _currentPose!['altitude'] as double;
+                              // Use exact hit mesh lat/lng if available, fallback to camera pose
+                              final lat = hit.hitLat ?? _currentPose!['latitude'] as double;
+                              final lng = hit.hitLng ?? _currentPose!['longitude'] as double;
+                              final alt = hit.hitAlt ?? _currentPose!['altitude'] as double;
 
                               final newPost = Post(
                                 latitude: lat,
@@ -246,6 +276,8 @@ class _ArViewState extends State<ArView> {
                                 creatorId: 'user_123',
                                 visibilityType: _visibilityType,
                                 reach: 50,
+                                placeName: placeName,
+                                placeCategory: placeCategory,
                               );
 
                               final created = await _apiService.createPost(newPost);
@@ -255,9 +287,17 @@ class _ArViewState extends State<ArView> {
                               final node = ArCoreNode(
                                 name: created.id ?? "temp_\${DateTime.now().millisecondsSinceEpoch}",
                                 shape: sphere,
-                                position: localPosition,
+                                position: hit.pose.translation,
                               );
-                              await arCoreController.addEarthAnchorNode(node, lat, lng, alt);
+                              
+                              if (_visibilityType == '1-to-many') {
+                                // 1-to-many posts pin to Rooftops using Streetscape Geometry.
+                                // We pass 0.5m so it hovers slightly above the detected roof.
+                                await arCoreController.resolveAnchorOnRooftopAsync(node, lat, lng, 0.5);
+                              } else {
+                                // 1-to-1 uses absolute physical altitude from the camera pose
+                                await arCoreController.addEarthAnchorNode(node, lat, lng, alt);
+                              }
                               
                               setState(() {
                                 nearbyPosts.add(created);
@@ -353,6 +393,31 @@ class _ArViewState extends State<ArView> {
                 enableTapRecognizer: true,
                 debug: true,
               ),
+              if (_isAuraTargetingBuilding)
+                IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.cyanAccent.withOpacity(0.4),
+                        width: 4,
+                      ),
+                    ),
+                    child: Center(
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.cyanAccent, width: 2),
+                          boxShadow: [
+                            BoxShadow(color: Colors.cyanAccent.withOpacity(0.4), blurRadius: 30, spreadRadius: 15)
+                          ]
+                        ),
+                        child: Center(child: Icon(Icons.add, color: Colors.cyanAccent, size: 30)),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned(
                 top: 40,
                 left: 20,
