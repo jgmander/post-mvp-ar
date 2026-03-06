@@ -82,6 +82,7 @@ class _ArViewState extends State<ArView> {
   void onArCoreViewCreated(ArCoreController controller) {
     arCoreController = controller;
     arCoreController.onNodeTap = (name) => _handleOnNodeTap(name);
+    arCoreController.onPlaneTap = _handleOnPlaneTap;
     _arCoreInitialized = true;
     
     // Resume immediately to fix black screen bug where Android misses the onResume hook.
@@ -133,6 +134,128 @@ class _ArViewState extends State<ArView> {
     } catch (e) {
       print("Node not found: $name");
     }
+  }
+
+  void _handleOnPlaneTap(List<ArCoreHitTestResult> hits) {
+    if (hits.isNotEmpty) {
+      final hit = hits.first;
+      _showCreatePostBottomSheet(hit.pose.translation);
+    }
+  }
+
+  void _showCreatePostBottomSheet(vector.Vector3 localPosition) {
+    final _contentController = TextEditingController();
+    String _visibilityType = '1-to-many';
+    bool _isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text("Pin a New Post", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 20),
+                  TextField(
+                    controller: _contentController,
+                    decoration: InputDecoration(
+                      labelText: 'Message Content',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    maxLines: 3,
+                  ),
+                  SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _visibilityType,
+                    items: ['1-to-1', '1-to-many'].map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) setModalState(() => _visibilityType = val);
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Visibility',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  _isSubmitting
+                      ? CircularProgressIndicator()
+                      : ElevatedButton(
+                          onPressed: () async {
+                            if (_contentController.text.isEmpty) return;
+                            setModalState(() => _isSubmitting = true);
+                            
+                            try {
+                              Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                              
+                              final newPost = Post(
+                                latitude: position.latitude,
+                                longitude: position.longitude,
+                                altitude: position.altitude,
+                                messageContent: _contentController.text,
+                                creatorId: 'user_123',
+                                visibilityType: _visibilityType,
+                                reach: 50,
+                              );
+
+                              final created = await _apiService.createPost(newPost);
+                              
+                              final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
+                              final sphere = ArCoreSphere(materials: [material], radius: 0.2);
+                              final node = ArCoreNode(
+                                name: created.id ?? "temp_${DateTime.now().millisecondsSinceEpoch}",
+                                shape: sphere,
+                                position: localPosition,
+                              );
+                              arCoreController.addArCoreNode(node);
+                              
+                              setState(() {
+                                nearbyPosts.add(created);
+                                _renderedPostIds.add(node.name!);
+                              });
+                              
+                              Navigator.pop(context);
+                              
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Post Pinned! CTA: ${created.ctaText ?? 'None'}')),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Error: $e')),
+                              );
+                              setModalState(() => _isSubmitting = false);
+                            }
+                          },
+                          child: Text('Drop Pin Here', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: Size.fromHeight(54),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                  SizedBox(height: 30),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _renderPosts() {
@@ -200,19 +323,20 @@ class _ArViewState extends State<ArView> {
                 enableTapRecognizer: true,
               ),
               Positioned(
-                bottom: 30,
-                right: 30,
-                child: FloatingActionButton(
-                  child: Icon(Icons.add),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => CreatePostView()),
-                    ).then((_) {
-                      setState(() => _isReady = false);
-                      _checkPermissionsAndFetchPosts();
-                    });
-                  },
+                top: 40,
+                left: 20,
+                right: 20,
+                child: Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    "Point at a surface and tap the white dots to drop a pin.",
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               )
             ],
