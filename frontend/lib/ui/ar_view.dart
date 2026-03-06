@@ -223,7 +223,7 @@ class _ArViewState extends State<ArView> {
                                 shape: sphere,
                                 position: localPosition,
                               );
-                              arCoreController.addArCoreNode(node);
+                              arCoreController.addArCoreNodeWithAnchor(node);
                               
                               setState(() {
                                 nearbyPosts.add(created);
@@ -287,10 +287,11 @@ class _ArViewState extends State<ArView> {
       final node = ArCoreNode(
         name: postId,
         shape: sphere,
-        position: vector.Vector3(xOffset, 0, zOffset), 
+        position: vector.Vector3(xOffset, -0.5, zOffset), // Drop them slightly below eye level so they hit the physical floor
       );
       
-      arCoreController.addArCoreNode(node);
+      // Anchoring them directly forces ARCore to calculate their position physically rather than relatively
+      arCoreController.addArCoreNodeWithAnchor(node);
       index++;
     }
   }
