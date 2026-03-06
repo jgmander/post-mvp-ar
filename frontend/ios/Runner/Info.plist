@@ -26,6 +26,12 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access for AR features.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app requires location access to find nearby AR posts.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>This app requires location access to find nearby AR posts.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -3,9 +3,25 @@ import 'package:http/http.dart' as http;
 import '../models/post.dart';
 
 class ApiService {
-  // Replace with actual deployed Cloud Run URL when available.
-  // For Local testing via Android Emulator, use 10.0.2.2.
-  static const String baseUrl = 'http://10.0.2.2:8080';
+  // Cloud Run Production URL
+  static const String baseUrl = 'https://post-mvp-backend-clb6khb3uq-uc.a.run.app';
+
+  ApiService() {
+    _healthCheck();
+  }
+
+  Future<void> _healthCheck() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/'));
+      if (response.statusCode == 200) {
+        print('Backend Health Check: SUCCESS - Connected to $baseUrl');
+      } else {
+        print('Backend Health Check: WARNING - Received status ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Backend Health Check: ERROR - Could not connect to $baseUrl. Details: $e');
+    }
+  }
 
   Future<Post> createPost(Post post) async {
     final response = await http.post(
