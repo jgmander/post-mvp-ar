@@ -15,6 +15,8 @@ class _ArViewState extends State<ArView> {
   late ArCoreController arCoreController;
   final ApiService _apiService = ApiService();
   List<Post> nearbyPosts = [];
+  bool _arCoreInitialized = false;
+  Set<String> _renderedPostIds = {};
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _ArViewState extends State<ArView> {
       setState(() {
         nearbyPosts = posts;
       });
+      _renderPosts();
     } catch (e) {
       print("Failed to fetch posts: $e");
     }
@@ -48,23 +51,43 @@ class _ArViewState extends State<ArView> {
 
   void onArCoreViewCreated(ArCoreController controller) {
     arCoreController = controller;
+    _arCoreInitialized = true;
+    _renderPosts();
+  }
+
+  void _renderPosts() {
+    if (!_arCoreInitialized) return;
     
     // In a full production app, we would use the Geospatial API to anchor these
     // nodes to precise real-world coordinates. For this MVP mockup code, we place
-    // them relatively around the user's start position using ArCoreNode.
+    // them relatively around the user's start position.
     
+    int index = 0;
     for (var post in nearbyPosts) {
+      String postId = post.id ?? "temp_${index}";
+      if (_renderedPostIds.contains(postId)) {
+        index++;
+        continue;
+      }
+      
+      _renderedPostIds.add(postId);
+      
       // Create a basic visual node for the post
       final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
       final sphere = ArCoreSphere(materials: [material], radius: 0.2);
       
       // We place them arbitrarily in front of the user for MVP testing if GPS is close
+      // Scatter them slightly based on index
+      double xOffset = (index % 3 - 1) * 0.5; // -0.5, 0, 0.5
+      double zOffset = -1.5 - (index / 3) * 0.5;
+
       final node = ArCoreNode(
         shape: sphere,
-        position: vector.Vector3(0, 0, -1.5), 
+        position: vector.Vector3(xOffset, 0, zOffset), 
       );
       
       arCoreController.addArCoreNode(node);
+      index++;
     }
   }
 
