@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
 import 'package:vector_math/vector_math_64.dart' as vector;
@@ -18,11 +19,29 @@ class _ArViewState extends State<ArView> {
   bool _arCoreInitialized = false;
   bool _isReady = false;
   Set<String> _renderedPostIds = {};
+  Timer? _vpsTimer;
+  Map<String, dynamic>? _currentPose;
 
   @override
   void initState() {
     super.initState();
     _checkPermissionsAndFetchPosts();
+    _vpsTimer = Timer.periodic(Duration(seconds: 1), (_) => _updateVPS());
+  }
+
+  Future<void> _updateVPS() async {
+    if (_arCoreInitialized) {
+      final pose = await arCoreController.getGeospatialPose();
+      if (mounted) {
+        setState(() {
+          _currentPose = pose;
+        });
+        if (pose != null && pose['accuracy'] < 1.0) {
+          // Once tracking is strong enough, render posts if they were waiting.
+          _renderPosts();
+        }
+      }
+    }
   }
 
   Future<void> _checkPermissionsAndFetchPosts() async {
@@ -36,6 +55,11 @@ class _ArViewState extends State<ArView> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Location permissions are permanently denied, we cannot request permissions. Earth Anchors require Location.')));
+      return;
     }
 
     Position? position;
@@ -139,6 +163,13 @@ class _ArViewState extends State<ArView> {
   void _handleOnPlaneTap(List<ArCoreHitTestResult> hits) {
     if (hits.isNotEmpty) {
       final hit = hits.first;
+      
+      final acc = _currentPose != null ? _currentPose!['accuracy'] : 999.0;
+      if (acc > 3.0) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('VPS Signal too weak (${acc.toStringAsFixed(1)}m > 3.0m). Please look around at buildings to localize.')));
+        return;
+      }
+
       _showCreatePostBottomSheet(hit.pose.translation);
     }
   }
@@ -202,12 +233,15 @@ class _ArViewState extends State<ArView> {
                             setModalState(() => _isSubmitting = true);
                             
                             try {
-                              Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-                              
+                              // Use the ARCore Earth API's exact lat/lng instead of rough Geolocator
+                              final lat = _currentPose!['latitude'] as double;
+                              final lng = _currentPose!['longitude'] as double;
+                              final alt = _currentPose!['altitude'] as double;
+
                               final newPost = Post(
-                                latitude: position.latitude,
-                                longitude: position.longitude,
-                                altitude: position.altitude,
+                                latitude: lat,
+                                longitude: lng,
+                                altitude: alt,
                                 messageContent: _contentController.text,
                                 creatorId: 'user_123',
                                 visibilityType: _visibilityType,
@@ -219,11 +253,11 @@ class _ArViewState extends State<ArView> {
                               final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
                               final sphere = ArCoreSphere(materials: [material], radius: 0.2);
                               final node = ArCoreNode(
-                                name: created.id ?? "temp_${DateTime.now().millisecondsSinceEpoch}",
+                                name: created.id ?? "temp_\${DateTime.now().millisecondsSinceEpoch}",
                                 shape: sphere,
                                 position: localPosition,
                               );
-                              arCoreController.addArCoreNodeWithAnchor(node);
+                              await arCoreController.addEarthAnchorNode(node, lat, lng, alt);
                               
                               setState(() {
                                 nearbyPosts.add(created);
@@ -278,26 +312,21 @@ class _ArViewState extends State<ArView> {
       // Create a basic visual node for the post
       final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
       final sphere = ArCoreSphere(materials: [material], radius: 0.2);
-      
-      // We place them arbitrarily in front of the user for MVP testing if GPS is close
-      // Scatter them slightly based on index
-      double xOffset = (index % 3 - 1) * 0.5; // -0.5, 0, 0.5
-      double zOffset = -1.5 - (index / 3) * 0.5;
 
       final node = ArCoreNode(
         name: postId,
         shape: sphere,
-        position: vector.Vector3(xOffset, -0.5, zOffset), // Drop them slightly below eye level so they hit the physical floor
       );
       
-      // Anchoring them directly forces ARCore to calculate their position physically rather than relatively
-      arCoreController.addArCoreNodeWithAnchor(node);
+      // Anchoring them directly using precise Earth GPS coordinates
+      arCoreController.addEarthAnchorNode(node, post.latitude, post.longitude, post.altitude ?? 0.0);
       index++;
     }
   }
 
   @override
   void dispose() {
+    _vpsTimer?.cancel();
     arCoreController.dispose();
     super.dispose();
   }
@@ -322,6 +351,7 @@ class _ArViewState extends State<ArView> {
               ArCoreView(
                 onArCoreViewCreated: onArCoreViewCreated,
                 enableTapRecognizer: true,
+                debug: true,
               ),
               Positioned(
                 top: 40,
@@ -330,12 +360,16 @@ class _ArViewState extends State<ArView> {
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.7),
+                    color: (_currentPose != null && _currentPose!['accuracy'] < 3.0) 
+                        ? Colors.green.withOpacity(0.8) 
+                        : Colors.red.withOpacity(0.8),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    "Point at a surface and tap the white dots to drop a pin.",
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                    _currentPose == null 
+                        ? "VPS Connecting..." 
+                        : "VPS Signal: ${_currentPose!['accuracy'].toStringAsFixed(2)}m\nPoint at surface & tap dots to pin.",
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                     textAlign: TextAlign.center,
                   ),
                 ),
