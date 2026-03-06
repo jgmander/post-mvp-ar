@@ -51,8 +51,54 @@ class _ArViewState extends State<ArView> {
 
   void onArCoreViewCreated(ArCoreController controller) {
     arCoreController = controller;
+    arCoreController.onNodeTap = (name) => _handleOnNodeTap(name);
     _arCoreInitialized = true;
     _renderPosts();
+  }
+
+  void _handleOnNodeTap(String name) {
+    try {
+      final post = nearbyPosts.firstWhere((p) {
+        int index = nearbyPosts.indexOf(p);
+        String postId = p.id ?? "temp_$index";
+        return postId == name;
+      });
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Digital Imprint'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(post.messageContent, style: TextStyle(fontSize: 18)),
+              if (post.ctaText != null && post.ctaText!.isNotEmpty) ...[
+                SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Action Selected: ${post.ctaText}')),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(40)),
+                  child: Text(post.ctaText!),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      print("Node not found: $name");
+    }
   }
 
   void _renderPosts() {
@@ -82,6 +128,7 @@ class _ArViewState extends State<ArView> {
       double zOffset = -1.5 - (index / 3) * 0.5;
 
       final node = ArCoreNode(
+        name: postId,
         shape: sphere,
         position: vector.Vector3(xOffset, 0, zOffset), 
       );
