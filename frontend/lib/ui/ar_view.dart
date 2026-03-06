@@ -37,7 +37,32 @@ class _ArViewState extends State<ArView> {
       if (permission == LocationPermission.denied) return;
     }
 
-    Position position = await Geolocator.getCurrentPosition();
+    Position? position;
+    try {
+      // First try to get cached position for instant loading
+      position = await Geolocator.getLastKnownPosition();
+      
+      // If no cache, try a quick low-accuracy fetch so it doesn't hang indoors
+      position ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 4),
+      );
+    } catch (e) {
+      print("Geolocation timeout or error indoors: \$e");
+      // Fallback to the user's hardcoded test location (Floral Park) if GPS is fully blocked indoors
+      position = Position(
+        latitude: 40.723000,
+        longitude: -73.705200,
+        timestamp: DateTime.now(),
+        accuracy: 100,
+        altitude: 0,
+        heading: 0,
+        speed: 0,
+        speedAccuracy: 0,
+        altitudeAccuracy: 0,
+        headingAccuracy: 0,
+      );
+    }
     try {
       final posts = await _apiService.getNearbyPosts(position.latitude, position.longitude);
       setState(() {
