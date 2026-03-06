@@ -16,6 +16,7 @@ class _ArViewState extends State<ArView> {
   final ApiService _apiService = ApiService();
   List<Post> nearbyPosts = [];
   bool _arCoreInitialized = false;
+  bool _isReady = false;
   Set<String> _renderedPostIds = {};
 
   @override
@@ -67,10 +68,14 @@ class _ArViewState extends State<ArView> {
       final posts = await _apiService.getNearbyPosts(position.latitude, position.longitude);
       setState(() {
         nearbyPosts = posts;
+        _isReady = true;
       });
       _renderPosts();
     } catch (e) {
       print("Failed to fetch posts: $e");
+      setState(() {
+        _isReady = true; // Proceed anyway so they can at least place a new post
+      });
     }
   }
 
@@ -173,27 +178,41 @@ class _ArViewState extends State<ArView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('Post AR World')),
-      body: Stack(
-        children: [
-          ArCoreView(
-            onArCoreViewCreated: onArCoreViewCreated,
-            enableTapRecognizer: true,
-          ),
-          Positioned(
-            bottom: 30,
-            right: 30,
-            child: FloatingActionButton(
-              child: Icon(Icons.add),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CreatePostView()),
-                ).then((_) => _checkPermissionsAndFetchPosts());
-              },
+      body: !_isReady 
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text("Acquiring GPS and checking surroundings..."),
+              ],
             ),
           )
-        ],
-      ),
+        : Stack(
+            children: [
+              ArCoreView(
+                onArCoreViewCreated: onArCoreViewCreated,
+                enableTapRecognizer: true,
+              ),
+              Positioned(
+                bottom: 30,
+                right: 30,
+                child: FloatingActionButton(
+                  child: Icon(Icons.add),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => CreatePostView()),
+                    ).then((_) {
+                      setState(() => _isReady = false);
+                      _checkPermissionsAndFetchPosts();
+                    });
+                  },
+                ),
+              )
+            ],
+          ),
     );
   }
 }
