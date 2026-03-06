@@ -83,6 +83,10 @@ class _ArViewState extends State<ArView> {
     arCoreController = controller;
     arCoreController.onNodeTap = (name) => _handleOnNodeTap(name);
     _arCoreInitialized = true;
+    
+    // Resume immediately to fix black screen bug where Android misses the onResume hook.
+    arCoreController.resume();
+    
     _renderPosts();
   }
 
