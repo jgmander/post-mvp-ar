@@ -107,4 +107,28 @@ class ApiService {
     }
     return null;
   }
+
+  Future<List<String>> getNearbyBuildings(double lat, double lng) async {
+    if (_cachedMapsApiKey == null) {
+      await getPlaceFromCoordinates(lat, lng); // Ensure key is fetched
+    }
+    List<String> placeIds = [];
+    try {
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=\$lat,\$lng&radius=30&type=building&key=\$_cachedMapsApiKey';
+      final response = await http.get(Uri.parse(placesUrl));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['results'] != null) {
+          for (var result in data['results']) {
+            if (result['place_id'] != null) {
+              placeIds.add(result['place_id']);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print("Error fetching nearby buildings: \$e");
+    }
+    return placeIds;
+  }
 }

@@ -1,5 +1,6 @@
 import java.util.Properties
 import java.io.FileInputStream
+import java.util.Base64
 
 plugins {
     id("com.android.application")
@@ -26,7 +27,7 @@ android {
     if (project.hasProperty("dart-defines")) {
         val dartDefines = project.property("dart-defines") as String
         dartDefines.split(",").forEach {
-            val decoded = String(java.util.Base64.getDecoder().decode(it))
+            val decoded = String(Base64.getDecoder().decode(it))
             val parts = decoded.split("=")
             if (parts.size == 2) {
                 dartEnvironmentVariables[parts[0]] = parts[1]

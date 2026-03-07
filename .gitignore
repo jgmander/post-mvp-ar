@@ -10,3 +10,4 @@ frontend/build/
 frontend/.dart_tool/
 frontend/.symlinks/
 frontend/.pub-cache/
+*.mp4

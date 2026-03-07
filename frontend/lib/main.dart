@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'ui/ar_view.dart';
+import 'ui/progressive_view.dart';
 
 void main() {
   runApp(PostApp());
@@ -15,7 +15,7 @@ class PostApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
         useMaterial3: true,
       ),
-      home: ArView(),
+      home: ProgressiveView(),
     );
   }
 }
