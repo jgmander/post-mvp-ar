@@ -19,6 +19,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   List<Post> nearbyPosts = [];
   bool _arCoreInitialized = false;
+  bool _postsRendered = false;
   Set<String> _renderedPostIds = {};
   Timer? _vpsTimer;
   Timer? _holdHapticTimer;
@@ -90,7 +91,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         final pose = await arCoreController.getGeospatialPose();
         if (mounted) {
           setState(() => _currentPose = pose);
-          if (pose != null && pose['accuracy'] < 1.0) {
+          if (pose != null && pose['accuracy'] < 3.0 && !_postsRendered) {
+            print('VPS Lock Achieved: Rendering ${nearbyPosts.length} persistent posts');
+            _postsRendered = true;
             _renderPosts();
           }
         }
@@ -106,8 +109,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     arCoreController.onCenterHitBuilding = _handleCenterHitBuilding;
     _arCoreInitialized = true;
     arCoreController.resume();
+    // Do NOT call _renderPosts() here — Earth is not tracking yet.
+    // Posts will be rendered by _updateVPS once accuracy < 3.0.
     _vpsTimer = Timer.periodic(Duration(seconds: 1), (_) => _updateVPS());
-    _renderPosts();
   }
 
   // ─── Ghost-Pin Targeting ───────────────────────────────────────
