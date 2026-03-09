@@ -261,9 +261,10 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                     spacing: 8,
                     runSpacing: 8,
                     children: quickMessages.map((msg) => ActionChip(
-                      label: Text(msg, style: TextStyle(color: Colors.white, fontSize: 13)),
-                      backgroundColor: Colors.cyanAccent.withOpacity(0.15),
-                      side: BorderSide(color: Colors.cyanAccent.withOpacity(0.3)),
+                      label: Text(msg, style: TextStyle(color: Colors.cyanAccent, fontSize: 14, fontWeight: FontWeight.w600)),
+                      backgroundColor: Colors.cyanAccent.withOpacity(0.12),
+                      side: BorderSide(color: Colors.cyanAccent.withOpacity(0.7), width: 1.5),
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       onPressed: () {
                         contentController.text = msg;
                         setModalState(() {});
