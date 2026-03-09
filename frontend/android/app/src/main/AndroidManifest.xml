@@ -7,7 +7,7 @@
     <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
     
     <application
-        android:label="frontend"
+        android:label="Post"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
