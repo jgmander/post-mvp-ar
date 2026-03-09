@@ -27,11 +27,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>This app requires camera access for AR features.</string>
+	<string>Post uses your camera to create augmented reality experiences, placing digital notes on real-world buildings and surfaces near you.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>This app requires location access to find nearby AR posts.</string>
+	<string>Post uses your location to anchor digital notes to precise real-world positions and show you nearby posts.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>This app requires location access to find nearby AR posts.</string>
+	<string>Post uses your location to anchor digital notes to precise real-world positions and show you nearby posts.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

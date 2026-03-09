@@ -1,4 +1,4 @@
-package com.post.app
+package com.post.spatial
 
 import io.flutter.embedding.android.FlutterActivity
 
