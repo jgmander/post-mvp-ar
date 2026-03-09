@@ -31,7 +31,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Post uses your location to anchor digital notes to precise real-world positions and show you nearby posts.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Post uses your location to anchor digital notes to precise real-world positions and show you nearby posts.</string>
+	<string>Post requires high-accuracy location data to physically anchor your digital notes to buildings and landmarks in augmented reality.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Post requires high-accuracy location data to physically anchor your digital notes to buildings and landmarks in augmented reality.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
