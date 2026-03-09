@@ -1,4 +1,4 @@
-package com.dbomar.post.frontend
+package com.post.app
 
 import io.flutter.embedding.android.FlutterActivity
 

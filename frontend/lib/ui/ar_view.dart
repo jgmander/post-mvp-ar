@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
 import 'package:vector_math/vector_math_64.dart' as vector;
 import 'package:geolocator/geolocator.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
 
@@ -32,6 +33,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   double _holdProgress = 0.0; // 0.0 → 1.0 over the hold duration
   static const Duration _holdDuration = Duration(milliseconds: 1200);
   DateTime? _holdStartTime;
+
+  // Black Box Debug Recorder
+  bool _isRecording = false;
+  int _recordingTick = 0;
+  Timer? _recordingTimer;
+  final StringBuffer _debugLog = StringBuffer();
+  int _buildingHitCount = 0;
 
   // Pulse animation for the ghost sphere
   late AnimationController _pulseController;
@@ -122,6 +130,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       setState(() => _isAuraTargetingBuilding = isBuilding);
       if (isBuilding) {
         HapticFeedback.lightImpact();
+        if (_isRecording) _buildingHitCount++;
       }
     }
   }
@@ -447,10 +456,130 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     }
   }
 
+  // ─── Black Box 15-Second Debug Recorder ────────────────────────
+
+  void _startDebugRecording() {
+    if (_isRecording) return;
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _isRecording = true;
+      _recordingTick = 0;
+      _buildingHitCount = 0;
+    });
+    _debugLog.clear();
+    _debugLog.writeln('=== POST BLACK BOX — ${DateTime.now().toIso8601String()} ===');
+    _debugLog.writeln('Device: Pixel 10 Pro XL | Package: com.post.app');
+    _debugLog.writeln('');
+
+    _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_recordingTick >= 15) {
+        _stopDebugRecording();
+        return;
+      }
+      _appendDebugTick();
+      _recordingTick++;
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _appendDebugTick() {
+    final t = _recordingTick.toString().padLeft(2, '0');
+    if (_currentPose != null) {
+      final acc = (_currentPose!['accuracy'] as num).toStringAsFixed(1);
+      // Privacy: round GPS to 4 decimal places (~11m precision)
+      final lat = (_currentPose!['latitude'] as num).toStringAsFixed(4);
+      final lng = (_currentPose!['longitude'] as num).toStringAsFixed(4);
+      final alt = (_currentPose!['altitude'] as num).toStringAsFixed(1);
+      final hit = _isAuraTargetingBuilding ? ' | CENTER_HIT: BUILDING' : '';
+      _debugLog.writeln('[${t}s] VPS: acc=${acc}m lat=$lat lng=$lng alt=$alt$hit');
+    } else {
+      _debugLog.writeln('[${t}s] VPS: NOT_TRACKING');
+    }
+  }
+
+  void _stopDebugRecording() {
+    _recordingTimer?.cancel();
+    _debugLog.writeln('');
+    _debugLog.writeln('[END] 15 ticks captured. $_buildingHitCount/15 BUILDING hits.');
+    _debugLog.writeln('Posts loaded: ${nearbyPosts.length} | Rendered: ${_renderedPostIds.length}');
+    HapticFeedback.heavyImpact();
+    setState(() => _isRecording = false);
+    _showDebugReviewSheet();
+  }
+
+  void _showDebugReviewSheet() {
+    final logText = _debugLog.toString();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Color(0xFF1A1A2E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+            SizedBox(height: 16),
+            Row(
+              children: [
+                Icon(Icons.bug_report, color: Colors.redAccent, size: 28),
+                SizedBox(width: 8),
+                Text('Black Box Captured', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+              ],
+            ),
+            SizedBox(height: 12),
+            Container(
+              height: 200,
+              width: double.infinity,
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: SingleChildScrollView(
+                child: Text(logText, style: TextStyle(color: Colors.greenAccent, fontSize: 11, fontFamily: 'monospace')),
+              ),
+            ),
+            SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  SharePlus.instance.share(ShareParams(text: logText, subject: 'Post Bug Report'));
+                },
+                icon: Icon(Icons.send_rounded),
+                label: Text('Send to Developer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Dismiss', style: TextStyle(color: Colors.white38)),
+              ),
+            ),
+            SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _vpsTimer?.cancel();
     _holdHapticTimer?.cancel();
+    _recordingTimer?.cancel();
     _pulseController.dispose();
     _reticleGlowController.dispose();
     if (_arCoreInitialized) arCoreController.dispose();
@@ -578,6 +707,23 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                       ),
                     ),
                     Spacer(),
+                    // 🐛 Bug Report button
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _isRecording ? Colors.redAccent.withOpacity(0.3) : Colors.black54,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.bug_report_rounded,
+                          color: _isRecording ? Colors.redAccent : Colors.white70,
+                          size: 24,
+                        ),
+                        onPressed: _isRecording ? null : _startDebugRecording,
+                        tooltip: 'Bug Report (15s)',
+                      ),
+                    ),
+                    SizedBox(width: 8),
                     // VPS accuracy badge
                     if (_currentPose != null)
                       Container(
