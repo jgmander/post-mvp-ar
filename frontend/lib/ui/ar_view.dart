@@ -28,6 +28,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   // Ghost-Pin state
   bool _isAuraTargetingBuilding = false;
   bool _isHolding = false;
+  bool _isDialogShowing = false;
   double _holdProgress = 0.0; // 0.0 → 1.0 over the hold duration
   static const Duration _holdDuration = Duration(milliseconds: 1200);
   DateTime? _holdStartTime;
@@ -390,11 +391,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   }
 
   void _handleOnNodeTap(String name) {
+    if (_isDialogShowing) return; // Prevent stacked dialogs from multi-node taps
     try {
       final post = nearbyPosts.firstWhere((p) {
         int index = nearbyPosts.indexOf(p);
         return (p.id ?? "temp_$index") == name;
       });
+      _isDialogShowing = true;
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -419,7 +422,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
           ),
           actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close'))],
         ),
-      );
+      ).then((_) => _isDialogShowing = false);
     } catch (_) {}
   }
 
@@ -610,27 +613,45 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
               ),
             ),
 
-            // ── Bottom instruction hint ──
+            // ── Bottom: Pin Here FAB + instruction hint ──
             Positioned(
-              bottom: 40,
+              bottom: 30,
               left: 0,
               right: 0,
-              child: Center(
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Instruction hint
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _isHolding
+                        ? 'Hold to charge... ${(_holdProgress * 100).toInt()}%'
+                        : hasVPS
+                          ? 'Tap the button or long-press to pin'
+                          : 'Scanning for VPS lock...',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
                   ),
-                  child: Text(
-                    _isHolding
-                      ? 'Hold to charge... ${(_holdProgress * 100).toInt()}%'
-                      : _isAuraTargetingBuilding && hasVPS
-                        ? 'Long-press to drop a Ghost Pin'
-                        : 'Point at a building surface',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                ),
+                  SizedBox(height: 12),
+                  // Big Pin FAB
+                  if (hasVPS)
+                    FloatingActionButton.extended(
+                      onPressed: () {
+                        HapticFeedback.heavyImpact();
+                        _dropGhostPin();
+                      },
+                      label: Text('Pin Here', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      icon: Icon(Icons.push_pin_rounded, size: 24),
+                      backgroundColor: Colors.cyanAccent,
+                      foregroundColor: Colors.black,
+                      elevation: 8,
+                    ),
+                ],
               ),
             ),
           ],
