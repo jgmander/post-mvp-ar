@@ -11,3 +11,12 @@ frontend/.dart_tool/
 frontend/.symlinks/
 frontend/.pub-cache/
 *.mp4
+
+# Firebase config (contains API keys)
+**/google-services.json
+**/GoogleService-Info.plist
+
+# iOS build artifacts
+frontend/ios/Pods/
+frontend/ios/Podfile.lock
+frontend/ios/.symlinks/
