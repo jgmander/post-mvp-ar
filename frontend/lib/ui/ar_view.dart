@@ -41,6 +41,10 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   final StringBuffer _debugLog = StringBuffer();
   int _buildingHitCount = 0;
 
+  // Demo Mode (iPad / unsupported device)
+  bool _isDemoMode = false;
+  String _demoModeReason = '';
+
   // Pulse animation for the ghost sphere
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -116,11 +120,21 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     arCoreController.onPlaneTap = _handleOnPlaneTap;
     arCoreController.onRooftopAnchorResolved = _handleRooftopAnchorResolved;
     arCoreController.onCenterHitBuilding = _handleCenterHitBuilding;
+    arCoreController.onCompatibilityError = _handleCompatibilityError;
     _arCoreInitialized = true;
     arCoreController.resume();
     // Do NOT call _renderPosts() here — Earth is not tracking yet.
     // Posts will be rendered by _updateVPS once accuracy < 3.0.
     _vpsTimer = Timer.periodic(Duration(seconds: 1), (_) => _updateVPS());
+  }
+
+  void _handleCompatibilityError(Map<String, dynamic> info) {
+    if (mounted) {
+      setState(() {
+        _isDemoMode = info['isDemoMode'] == true;
+        _demoModeReason = info['reason'] as String? ?? 'This device does not support spatial features.';
+      });
+    }
   }
 
   // ─── Ghost-Pin Targeting ───────────────────────────────────────
@@ -605,6 +619,49 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
               enableTapRecognizer: true,
               debug: true,
             ),
+
+            // ── DEMO MODE OVERLAY (iPad / unsupported device) ──
+            if (_isDemoMode)
+              Container(
+                color: Color(0xFF0A0E1A),
+                child: Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.smartphone, color: Colors.cyanAccent, size: 64),
+                        SizedBox(height: 24),
+                        Text('Spatial Features Not Available',
+                          style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 12),
+                        Text(_demoModeReason,
+                          style: TextStyle(color: Colors.cyanAccent, fontSize: 15),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 20),
+                        Text('For the full augmented reality experience,\nuse Post on iPhone.',
+                          style: TextStyle(color: Colors.white54, fontSize: 13),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: 32),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: Icon(Icons.arrow_back, color: Colors.cyanAccent),
+                          label: Text('Back to Map', style: TextStyle(color: Colors.cyanAccent)),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.cyanAccent.withOpacity(0.5)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             // ── RETICLE: Glowing cyan ring (always visible) ──
             Center(
