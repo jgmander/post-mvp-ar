@@ -23,6 +23,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   bool _postsRendered = false;
   Set<String> _renderedPostIds = {};
   Timer? _vpsTimer;
+  int _vpsScanSeconds = 0;
   Timer? _holdHapticTimer;
   Map<String, dynamic>? _currentPose;
 
@@ -104,10 +105,19 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         final pose = await arCoreController.getGeospatialPose();
         if (mounted) {
           setState(() => _currentPose = pose);
-          if (pose != null && pose['accuracy'] < 3.0 && !_postsRendered) {
-            print('VPS Lock Achieved: Rendering ${nearbyPosts.length} persistent posts');
-            _postsRendered = true;
-            _renderPosts();
+          if (pose != null && pose['accuracy'] < 3.0) {
+            _vpsScanSeconds = 0; // Reset on success
+            if (!_postsRendered) {
+              print('VPS Lock Achieved: Rendering ${nearbyPosts.length} persistent posts');
+              _postsRendered = true;
+              _renderPosts();
+            }
+          } else {
+            // No lock yet
+            _vpsScanSeconds++;
+            if (_vpsScanSeconds == 15 && !_isDemoMode) {
+              _showVPSFallbackDialog();
+            }
           }
         }
       } catch (_) {}
@@ -135,6 +145,42 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         _demoModeReason = info['reason'] as String? ?? 'This device does not support spatial features.';
       });
     }
+  }
+
+  void _showVPSFallbackDialog() {
+    if (_isDemoMode) return;
+    _vpsTimer?.cancel(); // Stop hammering the VPS check while dialog is up
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Color(0xFF1A1A2E),
+        title: Text('Spatial Features Limited', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Visual localization is limited in this area. You can still browse the map and view existing pins in 2D mode.',
+          style: TextStyle(color: Colors.white70)
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _vpsScanSeconds = -9999; // Prevent re-triggering for this session
+              // Resume timer just to keep updating accuracy if they want
+              _vpsTimer = Timer.periodic(Duration(seconds: 1), (_) => _updateVPS());
+            },
+            child: Text('Keep Scanning', style: TextStyle(color: Colors.white38)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context); // Go back to Map
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.cyanAccent, foregroundColor: Colors.black),
+            child: Text('Return to Map'),
+          ),
+        ]
+      )
+    );
   }
 
   // ─── Ghost-Pin Targeting ───────────────────────────────────────
@@ -207,8 +253,8 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     final acc = _currentPose!['accuracy'] ?? 999.0;
     if (acc > 3.0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('VPS Signal too weak (${acc.toStringAsFixed(1)}m). Look at buildings to localize.'),
-        backgroundColor: Colors.redAccent,
+        content: Text('Building lock required. Look at facades to localize (${acc.toStringAsFixed(1)}m).'),
+        backgroundColor: Colors.black87,
       ));
       return;
     }
@@ -691,6 +737,34 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                 },
               ),
             ),
+
+            // ── SCANNING OVERLAY INSTRUCTIONS ──
+            if (!hasVPS && !_isDemoMode && _vpsScanSeconds > 2 && _vpsScanSeconds < 15)
+              Positioned(
+                bottom: 120,
+                left: 24,
+                right: 24,
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.camera_alt_outlined, color: Colors.cyanAccent, size: 28),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          'Scanning...\nSlowly pan your phone across building facades to localize.',
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
             // ── GHOST SPHERE: Pulsing indicator when holding ──
             if (_isHolding && _isAuraTargetingBuilding)

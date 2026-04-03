@@ -18,5 +18,12 @@ frontend/.pub-cache/
 
 # iOS build artifacts
 frontend/ios/Pods/
-frontend/ios/Podfile.lock
 frontend/ios/.symlinks/
+
+# Required Guardrails
+*.json
+*.pem
+.env
+.secrets/
+__pycache__/
+.venv*/
