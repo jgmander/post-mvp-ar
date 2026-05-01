@@ -1,0 +1,57 @@
+=== Sync Payload Generated: Fri May  1 10:26:15 EDT 2026 ===
+
+
+--- BEGIN .agent_rules.md ---
+
+# Strict Zero Drift Policy
+1. AG is forbidden from navigating outside the project root.
+2. AG must not execute deployment commands without explicitly sourcing environment variables.
+3. All structural changes must be approved by the Brain.
+
+--- END .agent_rules.md ---
+
+
+--- BEGIN .agent/notebook_workflow_SOP.md ---
+
+# Prompt Structure SOP
+All future directives from the Brain will strictly follow a 4-part structure:
+1. Context Verification
+2. Execution Steps
+3. Boundary/Security Check
+4. Sync & Commit
+
+--- END .agent/notebook_workflow_SOP.md ---
+
+
+--- BEGIN .agent/audit_architecture.md ---
+
+# Tech Stack
+- Frontend: Flutter (iOS/Android mobile targeting)
+- Core APIs: ARCore Geospatial API, Google Maps SDK
+- Backend/Cloud: Python FastAPI (deployed via Google Cloud Run)
+- Database: Firestore NoSQL No-Schema
+
+# Key Dependencies
+- `arcore_flutter_plugin` (Custom native Swift/Kotlin bridged code)
+- `google_maps_flutter` 
+- `pydantic`, `firebase_admin` (Python backend)
+
+# Database/Routing Patterns
+- Client routing is handled natively via Flutter Progressive views.
+- Backend routing follows FastAPI structural patterns under `backend/main.py`.
+- NoSQL operations run directly against Firestore collections (e.g. `posts`).
+
+--- END .agent/audit_architecture.md ---
+
+
+--- BEGIN .agent/current_sprint.md ---
+
+# Current Sprint
+## Delivered
+* (None)
+## Current Phase
+* Sprint 1 - Geospatial Map & AR Reveal
+## Priorities
+* Establish Zero-Drift architecture
+
+--- END .agent/current_sprint.md ---
