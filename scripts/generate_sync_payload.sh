@@ -1,7 +1,7 @@
 #!/bin/bash
 PAYLOAD_FILE="notebook_sync_payload.txt"
 echo "=== Sync Payload Generated: $(date) ===" > $PAYLOAD_FILE
-for file in .agent_rules.md .agent/notebook_workflow_SOP.md .agent/audit_architecture.md .agent/current_sprint.md; do
+for file in .agent_rules.md .agent/notebook_workflow_SOP.md .agent/audit_architecture.md .agent/current_sprint.md .agent/secrets_architecture.md; do
   if [ -f "$file" ]; then
     echo -e "\n\n--- BEGIN $file ---\n" >> $PAYLOAD_FILE
     cat "$file" >> $PAYLOAD_FILE
