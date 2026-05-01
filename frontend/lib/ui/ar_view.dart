@@ -27,6 +27,18 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   Timer? _holdHapticTimer;
   Map<String, dynamic>? _currentPose;
 
+  // UI / AR Decoupling
+  final GlobalKey _arCoreKey = GlobalKey();
+  final ValueNotifier<int> _overlayTrigger = ValueNotifier<int>(0);
+
+  @override
+  void setState(VoidCallback fn) {
+    if (mounted) {
+      fn();
+      _overlayTrigger.value++;
+    }
+  }
+
   // Ghost-Pin state
   bool _isAuraTargetingBuilding = false;
   bool _isHolding = false;
@@ -650,23 +662,31 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final hasVPS = _currentPose != null && (_currentPose!['accuracy'] ?? 999.0) < 3.0;
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onLongPressStart: (_) => _startHold(),
-        onLongPressEnd: (_) => _releaseHold(),
-        child: Stack(
-          children: [
-            // AR Camera Feed
-            ArCoreView(
-              onArCoreViewCreated: onArCoreViewCreated,
-              enableTapRecognizer: true,
-              debug: true,
-            ),
+      body: Stack(
+        children: [
+          // AR Camera Feed - Isolated at the absolute base
+          ArCoreView(
+            key: _arCoreKey,
+            onArCoreViewCreated: onArCoreViewCreated,
+            enableTapRecognizer: true,
+            debug: true,
+          ),
+          
+          // Overlay Confinement - Reactive State Listener
+          Positioned.fill(
+            child: ValueListenableBuilder<int>(
+              valueListenable: _overlayTrigger,
+              builder: (context, _, __) {
+                final hasVPS = _currentPose != null && (_currentPose!['accuracy'] ?? 999.0) < 3.0;
 
-            // ── DEMO MODE OVERLAY (iPad / unsupported device) ──
+                return GestureDetector(
+                  onLongPressStart: (_) => _startHold(),
+                  onLongPressEnd: (_) => _releaseHold(),
+                  child: Stack(
+                    children: [
+                      // ── DEMO MODE OVERLAY (iPad / unsupported device) ──
             if (_isDemoMode)
               Container(
                 color: Color(0xFF0A0E1A),
@@ -929,11 +949,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                       foregroundColor: Colors.black,
                       elevation: 8,
                     ),
-                ],
-              ),
-            ),
-          ],
+                  ],
+                ),
+              );
+            },
+          ),
         ),
+        ],
       ),
     );
   }
