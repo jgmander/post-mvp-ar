@@ -157,7 +157,7 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '\${widget.propertyData['beds'] ?? 0} Beds, \${widget.propertyData['baths'] ?? 0} Baths',
+                    "${widget.propertyData['beds'] ?? 0} Beds, ${widget.propertyData['baths'] ?? 0} Baths",
                     style: TextStyle(fontSize: 18, color: Colors.grey[700]),
                   ),
                   SizedBox(height: 24),
