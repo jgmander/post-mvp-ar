@@ -951,16 +951,18 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                     ),
                   ],
                 ),
-              );
-            },
-          ),
-        ),
-        ],
-      ),
-    );
+              ), // end Positioned
+            ], // end Stack children
+          ), // end Stack
+        ); // end return GestureDetector
+      }, // end builder
+    ), // end ValueListenableBuilder
+  ), // end Positioned.fill
+  ],
+  ),
+  );
   }
 }
-
 // AnimatedBuilder is a simple alias for AnimatedWidget builder pattern
 class AnimatedBuilder extends AnimatedWidget {
   final Widget Function(BuildContext context, Widget? child) builder;
