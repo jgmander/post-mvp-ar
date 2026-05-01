@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import '../services/api_service.dart';
+import '../models/post.dart';
 import 'ar_reveal_screen.dart';
 
 class MapScreen extends StatefulWidget {
@@ -10,6 +11,7 @@ class MapScreen extends StatefulWidget {
 }
 
 class _MapScreenState extends State<MapScreen> {
+  final ApiService _apiService = ApiService();
   GoogleMapController? _mapController;
   final LatLng _initialPosition = const LatLng(40.7251, -73.7055);
   Set<Marker> _markers = {};
@@ -19,7 +21,6 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _requestPermissionsAndCenter();
-    _listenToPosts();
   }
 
   Future<void> _requestPermissionsAndCenter() async {
@@ -34,15 +35,21 @@ class _MapScreenState extends State<MapScreen> {
         Position? cached = await Geolocator.getLastKnownPosition();
         if (cached != null) {
           _animateToPosition(cached);
+          _fetchProperties(cached.latitude, cached.longitude);
         }
 
         Position precise = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
         );
         _animateToPosition(precise);
+        _fetchProperties(precise.latitude, precise.longitude);
+      } else {
+        // Fallback fetch if permission denied
+        _fetchProperties(_initialPosition.latitude, _initialPosition.longitude);
       }
     } catch (e) {
       print("Location permission or fetch failed: $e");
+      _fetchProperties(_initialPosition.latitude, _initialPosition.longitude);
     }
   }
 
@@ -58,31 +65,43 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _listenToPosts() {
-    FirebaseFirestore.instance.collection('posts').snapshots().listen((snapshot) {
+  Future<void> _fetchProperties(double lat, double lng) async {
+    try {
+      final posts = await _apiService.getNearbyPosts(lat, lng, radiusKm: 10.0);
       Set<Marker> newMarkers = {};
-      for (var doc in snapshot.docs) {
-        var data = doc.data();
-        double lat = data['lat'] ?? 0.0;
-        double lng = data['lng'] ?? 0.0;
-        
+      
+      for (var p in posts) {
+        Map<String, dynamic> propertyData = {
+          'id': p.id ?? '',
+          'lat': p.latitude,
+          'lng': p.longitude,
+          'price': p.placeName ?? 'Property Note',
+          'beds': 3, // placeholder
+          'baths': 2, // placeholder
+          'phone': '555-0199', // placeholder
+          'description': p.messageContent,
+        };
+
         newMarkers.add(
           Marker(
-            markerId: MarkerId(doc.id),
-            position: LatLng(lat, lng),
+            markerId: MarkerId(p.id ?? "post_${p.latitude}_${p.longitude}"),
+            position: LatLng(p.latitude, p.longitude),
             icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
             onTap: () {
-              _showPropertyBottomSheet(data);
+              _showPropertyBottomSheet(propertyData);
             },
           ),
         );
       }
+
       if (mounted) {
         setState(() {
           _markers = newMarkers;
         });
       }
-    });
+    } catch (e) {
+      print("Failed to fetch properties: $e");
+    }
   }
 
   void _showPropertyBottomSheet(Map<String, dynamic> data) {
@@ -106,6 +125,11 @@ class _MapScreenState extends State<MapScreen> {
               Text(
                 '${data['beds'] ?? 0} Beds, ${data['baths'] ?? 0} Baths',
                 style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                data['description'] ?? '',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
