@@ -132,6 +132,28 @@ class _ArOnboardingOverlayState extends State<ArOnboardingOverlay>
       curve: Curves.easeOutCubic,
     );
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // SPRINT 3.19 — Hardware Boot Sequencing
+    //
+    // We do NOT initialise sensors inside initState() directly. The root cause
+    // of the CameraAccessException (CAMERA_ERROR code 3 / ENOSYS -38) was a
+    // camera2 HAL collision: geolocator's getLastKnownPosition() was opening a
+    // competing camera handle at the exact same moment ARCore was negotiating
+    // exclusive access to Camera 0.
+    //
+    // The fix: yield 1 200 ms of exclusive boot time to the native ARCore
+    // camera2 session before we touch any other hardware stream.
+    // ─────────────────────────────────────────────────────────────────────────
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) _initializeSensors();
+    });
+  }
+
+  // ── Sensor Initialisation (deferred post-ARCore boot) ─────────────────────
+
+  /// Starts both the compass and location streams.
+  /// Must only be called after the 1 200 ms ARCore boot guard in [initState].
+  void _initializeSensors() {
     _startCompass();
     _startLocation();
   }
@@ -149,24 +171,23 @@ class _ArOnboardingOverlayState extends State<ArOnboardingOverlay>
   }
 
   void _startLocation() async {
-    // Request permission once — geolocator already has it for AR, but we call
-    // this defensively so the overlay works standalone.
+    // Permission check only — we never open a raw camera handle here.
     LocationPermission perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
     }
     if (perm == LocationPermission.deniedForever) return;
+    if (!mounted) return;
 
-    // Get an immediate coarse fix first so the arrow shows instantly.
-    final lastKnown = await Geolocator.getLastKnownPosition();
-    if (lastKnown != null && mounted) {
-      setState(() => _userPosition = lastKnown);
-    }
-
-    // Then stream live updates at high accuracy (ARCore needs it anyway).
+    // REMOVED: Geolocator.getLastKnownPosition() — this call opened a
+    // competing camera2 context on some Pixel HAL builds, causing the fatal
+    // CameraAccessException that killed the AR session.
+    //
+    // We go directly to the position stream, using LocationAccuracy.high
+    // (avoids the aggressive hardware polling of bestForNavigation).
     _locationSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.best,
+        accuracy: LocationAccuracy.high,
         distanceFilter: 2, // update every 2 metres of movement
       ),
     ).listen((Position pos) {
