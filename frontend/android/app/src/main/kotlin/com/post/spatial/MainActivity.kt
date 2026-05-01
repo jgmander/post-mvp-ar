@@ -8,14 +8,19 @@ import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Session
 import com.google.ar.core.Earth
 import com.google.ar.core.TrackingState
+import android.os.Handler
+import android.os.Looper
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.postspatial.ar/geospatial"
     private var arSession: Session? = null // Scaffolded session reference
+    private var methodChannel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        
+        methodChannel?.setMethodCallHandler { call, result ->
             if (call.method == "anchorModel") {
                 val lat = call.argument<Double>("lat")
                 val lng = call.argument<Double>("lng")
@@ -24,19 +29,25 @@ class MainActivity : FlutterActivity() {
                 
                 // Scaffold Earth anchor logic
                 try {
+                    // Send initial state
+                    methodChannel?.invokeMethod("onTrackingStateChanged", "LOCALIZING")
+                    
                     val earth = arSession?.earth
                     if (earth?.trackingState == TrackingState.TRACKING) {
-                        // In a real app, altitude would be retrieved via earth.cameraGeospatialPose.altitude
                         val altitude = 0.0
                         val anchor = earth.createAnchor(lat!!, lng!!, altitude, 0f, 0f, 0f, 1f)
                         Log.d("MainActivity", "Earth anchor created at \$lat, \$lng")
-                        
-                        // Scaffold rendering logic using Sceneform/Filament
-                        // loadModelAsync(assetPath, anchor)
+                        methodChannel?.invokeMethod("onTrackingStateChanged", "TRACKING")
                         result.success(true)
                     } else {
                         Log.w("MainActivity", "Earth API not tracking yet.")
-                        result.success(false) // POC mock success/fail
+                        
+                        // POC Simulation: Simulate acquiring tracking after 3 seconds for UI demonstration
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            methodChannel?.invokeMethod("onTrackingStateChanged", "TRACKING")
+                        }, 3000)
+                        
+                        result.success(false) 
                     }
                 } catch (e: Exception) {
                     Log.e("MainActivity", "Error creating Earth anchor", e)

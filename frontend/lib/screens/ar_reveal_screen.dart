@@ -14,11 +14,23 @@ class ArRevealScreen extends StatefulWidget {
 
 class _ArRevealScreenState extends State<ArRevealScreen> {
   static const platform = MethodChannel('com.postspatial.ar/geospatial');
+  final ValueNotifier<String> trackingState = ValueNotifier<String>('INITIALIZING');
 
   @override
   void initState() {
     super.initState();
+    _setupMethodChannelHandler();
     _triggerNativeARAnchor();
+  }
+
+  void _setupMethodChannelHandler() {
+    platform.setMethodCallHandler((call) async {
+      if (call.method == "onTrackingStateChanged") {
+        String state = call.arguments.toString();
+        trackingState.value = state;
+        print("Flutter tracking state updated: \$state");
+      }
+    });
   }
 
   Future<void> _triggerNativeARAnchor() async {
@@ -54,6 +66,12 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
   }
 
   @override
+  void dispose() {
+    trackingState.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent, // AR view will be underneath natively
@@ -65,42 +83,98 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
       ),
       body: Stack(
         children: [
-          // The native camera stream handles rendering the AR under the transparent scaffold
-          Center(
-            child: Text(
-              'AR Environment Initializing...',
-              style: TextStyle(color: Colors.white70),
-            ),
+          ValueListenableBuilder<String>(
+            valueListenable: trackingState,
+            builder: (context, state, child) {
+              if (state == 'LOCALIZING' || state == 'INITIALIZING') {
+                return Center(
+                  child: Container(
+                    padding: EdgeInsets.all(24),
+                    margin: EdgeInsets.symmetric(horizontal: 32),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(color: Colors.white),
+                        SizedBox(height: 16),
+                        Text(
+                          'Point your camera at surrounding buildings to localize...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              } else if (state == 'TRACKING') {
+                return Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.white),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Location Found. Anchoring Property Data.',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return Container(); // Fallback for UNKNOWN
+            },
           ),
         ],
       ),
-      bottomSheet: Container(
-        color: Colors.white,
-        padding: EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.propertyData['price'] ?? 'Unknown Price',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text(
-              '\${widget.propertyData['beds'] ?? 0} Beds, \${widget.propertyData['baths'] ?? 0} Baths',
-              style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-            ),
-            SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _textAgent,
-              style: ElevatedButton.styleFrom(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.blue,
+      bottomSheet: ValueListenableBuilder<String>(
+        valueListenable: trackingState,
+        builder: (context, state, child) {
+          if (state == 'TRACKING') {
+            return Container(
+              color: Colors.white,
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    widget.propertyData['price'] ?? 'Unknown Price',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '\${widget.propertyData['beds'] ?? 0} Beds, \${widget.propertyData['baths'] ?? 0} Baths',
+                    style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+                  ),
+                  SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _textAgent,
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: Colors.blue,
+                    ),
+                    child: Text('Text the Agent', style: TextStyle(fontSize: 18, color: Colors.white)),
+                  ),
+                ],
               ),
-              child: Text('Text the Agent', style: TextStyle(fontSize: 18, color: Colors.white)),
-            ),
-          ],
-        ),
+            );
+          }
+          return SizedBox.shrink(); // Hidden while localizing
+        },
       ),
     );
   }
