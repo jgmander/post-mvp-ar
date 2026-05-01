@@ -15,6 +15,33 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.postspatial.ar/geospatial"
     private var arSession: Session? = null // Scaffolded session reference
     private var methodChannel: MethodChannel? = null
+    
+    // Live Tracking State Cache
+    private var lastTrackingState: TrackingState? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    
+    // Equivalent Session Frame Listener (Live Binding)
+    private val trackingStatePoller = object : Runnable {
+        override fun run() {
+            val earth = arSession?.earth
+            val currentState = earth?.trackingState
+            
+            if (currentState != null && currentState != lastTrackingState) {
+                lastTrackingState = currentState
+                val stateString = when (currentState) {
+                    TrackingState.TRACKING -> "TRACKING"
+                    TrackingState.PAUSED -> "LOCALIZING"
+                    TrackingState.STOPPED -> "NOT_AVAILABLE"
+                    else -> "UNKNOWN"
+                }
+                Log.d("MainActivity", "Live Tracking State Transitioned: \$stateString")
+                methodChannel?.invokeMethod("onTrackingStateChanged", stateString)
+            }
+            
+            // Re-queue the equivalent frame listener to query next frame
+            mainHandler.postDelayed(this, 100)
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -27,26 +54,21 @@ class MainActivity : FlutterActivity() {
                 val assetPath = call.argument<String>("assetPath")
                 Log.d("MainActivity", "Received anchorModel: lat=\$lat, lng=\$lng, assetPath=\$assetPath")
                 
+                // Bind the live tracking loop
+                lastTrackingState = null
+                methodChannel?.invokeMethod("onTrackingStateChanged", "LOCALIZING")
+                mainHandler.post(trackingStatePoller)
+                
                 // Scaffold Earth anchor logic
                 try {
-                    // Send initial state
-                    methodChannel?.invokeMethod("onTrackingStateChanged", "LOCALIZING")
-                    
                     val earth = arSession?.earth
                     if (earth?.trackingState == TrackingState.TRACKING) {
                         val altitude = 0.0
                         val anchor = earth.createAnchor(lat!!, lng!!, altitude, 0f, 0f, 0f, 1f)
                         Log.d("MainActivity", "Earth anchor created at \$lat, \$lng")
-                        methodChannel?.invokeMethod("onTrackingStateChanged", "TRACKING")
                         result.success(true)
                     } else {
-                        Log.w("MainActivity", "Earth API not tracking yet.")
-                        
-                        // POC Simulation: Simulate acquiring tracking after 3 seconds for UI demonstration
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            methodChannel?.invokeMethod("onTrackingStateChanged", "TRACKING")
-                        }, 3000)
-                        
+                        Log.w("MainActivity", "Earth API not tracking yet. Live binding active.")
                         result.success(false) 
                     }
                 } catch (e: Exception) {
@@ -57,5 +79,10 @@ class MainActivity : FlutterActivity() {
                 result.notImplemented()
             }
         }
+    }
+    
+    override fun onDestroy() {
+        mainHandler.removeCallbacks(trackingStatePoller)
+        super.onDestroy()
     }
 }
