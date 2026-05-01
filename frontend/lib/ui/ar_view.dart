@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
+import 'ar_onboarding_overlay.dart';
 
 class ArView extends StatefulWidget {
   const ArView({Key? key}) : super(key: key);
@@ -26,6 +27,17 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   int _vpsScanSeconds = 0;
   Timer? _holdHapticTimer;
   Map<String, dynamic>? _currentPose;
+
+  // Two-Phase Onboarding state
+  bool _hasVpsLock = false;
+  VioFailureReason _vioFailureReason = VioFailureReason.none;
+
+  // Target property for the Phase 1 compass.
+  // These are passed from the parent navigator route in a real app;
+  // the fallbacks below ensure the compass always shows something meaningful.
+  static const double _targetLat = 40.7128;
+  static const double _targetLng = -74.0060;
+  static const String _targetName = 'Target Property';
 
   // UI / AR Decoupling
   final GlobalKey _arCoreKey = GlobalKey();
@@ -118,14 +130,32 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
         if (mounted) {
           setState(() => _currentPose = pose);
           if (pose != null && pose['accuracy'] < 3.0) {
-            _vpsScanSeconds = 0; // Reset on success
+            _vpsScanSeconds = 0;
+            if (!_hasVpsLock) {
+              setState(() {
+                _hasVpsLock = true;
+                _vioFailureReason = VioFailureReason.none;
+              });
+            }
             if (!_postsRendered) {
               print('VPS Lock Achieved: Rendering ${nearbyPosts.length} persistent posts');
               _postsRendered = true;
               _renderPosts();
             }
           } else {
-            // No lock yet
+            // No lock yet — decode failure reason from native payload
+            if (_hasVpsLock) {
+              setState(() => _hasVpsLock = false);
+            }
+            final reason = pose?['trackingFailureReason'] as String?;
+            final nextReason = reason == 'EXCESSIVE_MOTION'
+                ? VioFailureReason.excessiveMotion
+                : reason == 'INSUFFICIENT_FEATURES'
+                    ? VioFailureReason.insufficientFeatures
+                    : VioFailureReason.none;
+            if (nextReason != _vioFailureReason) {
+              setState(() => _vioFailureReason = nextReason);
+            }
             _vpsScanSeconds++;
             if (_vpsScanSeconds == 15 && !_isDemoMode) {
               _showVPSFallbackDialog();
@@ -686,6 +716,17 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                   onLongPressEnd: (_) => _releaseHold(),
                   child: Stack(
                     children: [
+                      // ── PHASE 1 & 2: Two-Phase Onboarding Overlay ──
+                      // Strictly inside ValueListenableBuilder. Never touches ArCoreView.
+                      if (!_isDemoMode)
+                        ArOnboardingOverlay(
+                          targetLat: _targetLat,
+                          targetLng: _targetLng,
+                          propertyName: _targetName,
+                          isTracking: _hasVpsLock,
+                          failureReason: _vioFailureReason,
+                        ),
+
                       // ── DEMO MODE OVERLAY (iPad / unsupported device) ──
             if (_isDemoMode)
               Container(

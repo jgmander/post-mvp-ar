@@ -34,6 +34,9 @@
 	<string>Post requires high-accuracy location data to physically anchor your digital notes to buildings and landmarks in augmented reality.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Post requires high-accuracy location data to physically anchor your digital notes to buildings and landmarks in augmented reality.</string>
+	<!-- flutter_compass: required to read the magnetic field sensor for device heading -->
+	<key>NSMotionUsageDescription</key>
+	<string>Post uses your device's compass to point you toward nearby properties before the AR session locks on.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
