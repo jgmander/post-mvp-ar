@@ -2,6 +2,6 @@
 ## Delivered
 * (None)
 ## Current Phase
-* Sprint 1 - Geospatial Map & AR Reveal
+* Sprint 3.10 - IAM Boundary Enforcement
 ## Priorities
 * Establish Zero-Drift architecture

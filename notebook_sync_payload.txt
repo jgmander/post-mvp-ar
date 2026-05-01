@@ -1,4 +1,4 @@
-=== Sync Payload Generated: Fri May  1 13:28:28 EDT 2026 ===
+=== Sync Payload Generated: Fri May  1 13:50:02 EDT 2026 ===
 
 
 --- BEGIN .agent_rules.md ---
@@ -7,6 +7,11 @@
 1. AG is forbidden from navigating outside the project root.
 2. AG must not execute deployment commands without explicitly sourcing environment variables.
 3. All structural changes must be approved by the Brain.
+
+# CRITICAL: IAM & GCP AUTHENTICATION BOUNDARIES
+- Under NO circumstances shall the agent utilize or fall back to the root identity (jgmander@gmail.com) for execution, deployment, or secret extraction.
+- All GCP operations MUST use the dedicated service account: ag-agent@dbomar-post-mvp.iam.gserviceaccount.com.
+- If the service account encounters a PERMISSION_DENIED error, DO NOT attempt to bypass it. You must Fail Loudly, output the exact IAM error, and halt execution so the Architect can adjust the GCP IAM bindings (e.g., granting roles/secretmanager.secretAccessor).
 
 --- END .agent_rules.md ---
 
@@ -19,6 +24,9 @@ All future directives from the Brain will strictly follow a 4-part structure:
 2. Execution Steps
 3. Boundary/Security Check
 4. Sync & Commit
+
+# GCP Authentication
+SOP for Service Account execution: "Ensure the service account is properly activated via its local JSON credential file using gcloud auth activate-service-account ag-agent@dbomar-post-mvp.iam.gserviceaccount.com --key-file=[PATH_TO_KEY] before attempting to fetch secrets, OR use --impersonate-service-account if configured by the Architect."
 
 --- END .agent/notebook_workflow_SOP.md ---
 
@@ -50,7 +58,7 @@ All future directives from the Brain will strictly follow a 4-part structure:
 ## Delivered
 * (None)
 ## Current Phase
-* Sprint 3.5 - Secret Archaeology & Persistence
+* Sprint 3.10 - IAM Boundary Enforcement
 ## Priorities
 * Establish Zero-Drift architecture
 
