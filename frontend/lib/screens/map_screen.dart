@@ -888,7 +888,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             markers: _markers,
             onTap: _handleMapTap,
             myLocationEnabled: _locationGranted,
-            myLocationButtonEnabled: _locationGranted,
+            myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             buildingsEnabled: true,
             mapType: MapType.normal,
@@ -898,6 +898,49 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             onMapCreated: (controller) {
               _mapController = controller;
             },
+          ),
+          Positioned(
+            bottom: 100,
+            right: 16,
+            child: GestureDetector(
+              onTap: () async {
+                HapticFeedback.lightImpact();
+                try {
+                  Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                  _mapController?.animateCamera(
+                    CameraUpdate.newCameraPosition(
+                      CameraPosition(
+                        target: LatLng(pos.latitude, pos.longitude),
+                        zoom: 19.5,
+                        tilt: 45.0,
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  debugPrint('Error fetching location: $e');
+                }
+              },
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.my_location,
+                  color: Color(0xFF0D1220), // Dark charcoal
+                  size: 26,
+                ),
+              ),
+            ),
           ),
           IgnorePointer(
             ignoring: !_isBooting,

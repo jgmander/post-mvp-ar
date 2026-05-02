@@ -2,6 +2,6 @@
 ## Delivered
 * (None)
 ## Current Phase
-* Sprint 3.45 - Eradicating Blur & Upgrading Marker Pop
+* Sprint 3.46 - Premium Location UX
 ## Priorities
 * Establish Zero-Drift architecture
