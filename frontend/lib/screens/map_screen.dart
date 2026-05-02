@@ -322,40 +322,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     [Color(0xFF2a1f35), Color(0xFF0d0810)],
   ];
 
-  Widget _buildHeroImage(int idx) {
-    final g = _heroGradients[idx % _heroGradients.length];
+  Widget _buildHeroImage(Post post) {
+    const String mapsApiKey = String.fromEnvironment('MAPS_API_KEY', defaultValue: '');
+    final streetViewUrl = 'https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${post.latitude},${post.longitude}&fov=90&pitch=0&key=$mapsApiKey';
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: g,
-            ),
-          ),
-        ),
-        // Faint grid overlay for architectural feel
-        Opacity(
-          opacity: 0.15,
-          child: GridPaper(
-            color: _PostColors.brand,
-            divisions: 1,
-            subdivisions: 1,
-            interval: 28,
-          ),
-        ),
-        // Top scrim for badge legibility
+        Image.network(streetViewUrl, fit: BoxFit.cover),
+        // Top scrim for badge legibility against bright sky
         Positioned(
           top: 0, left: 0, right: 0,
           child: Container(
-            height: 60,
+            height: 80,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.black.withValues(alpha: 0.65), Colors.transparent],
+                colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        // Bottom scrim for pagination/structural legibility
+        Positioned(
+          bottom: 0, left: 0, right: 0,
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
               ),
             ),
           ),
@@ -468,7 +466,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             PageView.builder(
                               itemCount: cluster.length,
                               onPageChanged: (i) => setModalState(() => currentPage = i),
-                              itemBuilder: (_, i) => _buildHeroImage(i),
+                              itemBuilder: (_, i) => _buildHeroImage(cluster[i]),
                             ),
                             if (cluster.length > 1)
                               Positioned(

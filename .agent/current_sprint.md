@@ -2,6 +2,6 @@
 ## Delivered
 * (None)
 ## Current Phase
-* Sprint 3.46 - Premium Location UX
+* Sprint 3.47 - Dynamic Street View Hero Images
 ## Priorities
 * Establish Zero-Drift architecture
