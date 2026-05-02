@@ -15,6 +15,7 @@ class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   final LatLng _initialPosition = const LatLng(40.7251, -73.7055);
   Set<Marker> _markers = {};
+  Set<Circle> _circles = {};
   bool _locationGranted = false;
 
   @override
@@ -58,7 +59,7 @@ class _MapScreenState extends State<MapScreen> {
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: LatLng(pos.latitude, pos.longitude),
-          zoom: 16.0,
+          zoom: 18.5,
           tilt: 45.0,
         ),
       ),
@@ -69,17 +70,14 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final posts = await _apiService.getNearbyPosts(lat, lng, radiusKm: 10.0);
       Set<Marker> newMarkers = {};
+      Set<Circle> newCircles = {};
       
       for (var p in posts) {
         Map<String, dynamic> propertyData = {
           'id': p.id ?? '',
           'lat': p.latitude,
           'lng': p.longitude,
-          'price': p.placeName ?? 'Property Note',
-          'beds': 3, // placeholder
-          'baths': 2, // placeholder
-          'phone': '555-0199', // placeholder
-          'description': p.messageContent,
+          'price': p.messageContent,
         };
 
         newMarkers.add(
@@ -92,11 +90,23 @@ class _MapScreenState extends State<MapScreen> {
             },
           ),
         );
+
+        newCircles.add(
+          Circle(
+            circleId: CircleId(p.id ?? "circle_${p.latitude}_${p.longitude}"),
+            center: LatLng(p.latitude, p.longitude),
+            radius: 15.0,
+            fillColor: Colors.blueAccent.withOpacity(0.2),
+            strokeColor: Colors.blueAccent,
+            strokeWidth: 2,
+          ),
+        );
       }
 
       if (mounted) {
         setState(() {
           _markers = newMarkers;
+          _circles = newCircles;
         });
       }
     } catch (e) {
@@ -120,16 +130,6 @@ class _MapScreenState extends State<MapScreen> {
               Text(
                 data['price'] ?? 'Unknown Price',
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${data['beds'] ?? 0} Beds, ${data['baths'] ?? 0} Baths',
-                style: TextStyle(fontSize: 18, color: Colors.grey[700]),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                data['description'] ?? '',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
@@ -188,8 +188,9 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: GoogleMap(
-        initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 16),
+        initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 18.5, tilt: 45.0),
         markers: _markers,
+        circles: _circles,
         myLocationEnabled: _locationGranted,
         myLocationButtonEnabled: _locationGranted,
         zoomControlsEnabled: false,
