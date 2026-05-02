@@ -2,6 +2,6 @@
 ## Delivered
 * (None)
 ## Current Phase
-* Sprint 3.42 - Vector Map ID Injection
+* Sprint 3.43 - iOS Vector Map ID
 ## Priorities
 * Establish Zero-Drift architecture

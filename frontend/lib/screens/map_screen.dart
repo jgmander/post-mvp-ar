@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:geocoding/geocoding.dart';
@@ -936,7 +937,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             zoomControlsEnabled: false,
             buildingsEnabled: true,
             mapType: MapType.normal,
-            cloudMapId: const String.fromEnvironment('MAP_ID', defaultValue: ''),
+            cloudMapId: Platform.isIOS
+                ? const String.fromEnvironment('IOS_MAP_ID', defaultValue: '')
+                : const String.fromEnvironment('MAP_ID', defaultValue: ''),
             onMapCreated: (controller) {
               _mapController = controller;
             },
