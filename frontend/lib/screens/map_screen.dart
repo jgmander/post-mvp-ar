@@ -704,7 +704,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           builder: (BuildContext context, StateSetter setModalState) {
             return Container(
               decoration: const BoxDecoration(
-                color: _PostColors.surface,
+                color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
               padding: EdgeInsets.only(
@@ -721,7 +721,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       margin: const EdgeInsets.symmetric(vertical: 14),
                       width: 40, height: 4,
                       decoration: BoxDecoration(
-                        color: _PostColors.divider,
+                        color: const Color(0xFFDDE3EE),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -732,17 +732,19 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       Container(
                         width: 40, height: 40,
                         decoration: BoxDecoration(
-                          color: _PostColors.accent.withValues(alpha: 0.15),
+                          color: const Color(0xFF4F8EF7).withValues(alpha: 0.10),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.add_location_alt_rounded, color: _PostColors.accent, size: 20),
+                        child: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF4F8EF7), size: 20),
                       ),
                       const SizedBox(width: 14),
                       const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Create Listing', style: TextStyle(color: _PostColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                          Text('Property confirmed', style: TextStyle(color: _PostColors.textSecondary, fontSize: 12)),
+                          Text('Create Listing',
+                            style: TextStyle(color: Color(0xFF0D1220), fontSize: 18, fontWeight: FontWeight.w700)),
+                          Text('Property confirmed',
+                            style: TextStyle(color: Color(0xFF6B7A99), fontSize: 12)),
                         ],
                       ),
                     ],
@@ -752,41 +754,42 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: _PostColors.surfaceAlt,
+                      color: const Color(0xFFF4F6FB),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _PostColors.divider),
+                      border: Border.all(color: const Color(0xFFDDE3EE)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.place_rounded, color: _PostColors.brand, size: 16),
+                        const Icon(Icons.place_rounded, color: Color(0xFF4F8EF7), size: 16),
                         const SizedBox(width: 8),
-                        Expanded(child: Text(address, style: const TextStyle(color: _PostColors.textSecondary, fontSize: 13))),
+                        Expanded(child: Text(address,
+                          style: const TextStyle(color: Color(0xFF4A5568), fontSize: 13))),
                       ],
                     ),
                   ),
                   const SizedBox(height: 14),
-                  // Message field
+                  // Message / Listing details field
                   TextField(
                     controller: messageController,
                     enabled: !isSaved && !isSaving,
                     maxLines: 3,
-                    style: const TextStyle(color: _PostColors.textPrimary, fontSize: 15),
+                    style: const TextStyle(color: Color(0xFF0D1220), fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'What do you want to remember here?',
-                      hintStyle: const TextStyle(color: _PostColors.textSecondary, fontSize: 14),
+                      hintText: 'Price, description, listing details...',
+                      hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14),
                       filled: true,
-                      fillColor: _PostColors.surfaceAlt,
+                      fillColor: const Color(0xFFF4F6FB),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: _PostColors.divider),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3EE)),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: _PostColors.divider),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3EE)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: _PostColors.brand, width: 1.5),
+                        borderSide: const BorderSide(color: Color(0xFF4F8EF7), width: 1.5),
                       ),
                       contentPadding: const EdgeInsets.all(14),
                     ),
@@ -933,7 +936,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             zoomControlsEnabled: false,
             buildingsEnabled: true,
             mapType: MapType.normal,
-            style: _kDarkMapStyle,
             onMapCreated: (controller) {
               _mapController = controller;
             },
