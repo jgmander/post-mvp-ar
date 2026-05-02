@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter/services.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
@@ -59,7 +61,7 @@ class _MapScreenState extends State<MapScreen> {
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: LatLng(pos.latitude, pos.longitude),
-          zoom: 18.5,
+          zoom: 19.0,
           tilt: 45.0,
         ),
       ),
@@ -227,6 +229,166 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Future<void> _handleMapTap(LatLng coord) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(coord.latitude, coord.longitude);
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks.first;
+        bool hasStructure = (place.subThoroughfare != null && place.subThoroughfare!.isNotEmpty);
+        if (hasStructure) {
+          _showCreationBottomSheet(coord, place);
+        } else {
+          HapticFeedback.vibrate();
+        }
+      } else {
+        HapticFeedback.vibrate();
+      }
+    } catch (e) {
+      print("Geocoding failed: $e");
+      HapticFeedback.vibrate();
+    }
+  }
+
+  void _showCreationBottomSheet(LatLng coord, Placemark place) {
+    String address = [
+      if (place.subThoroughfare?.isNotEmpty == true) place.subThoroughfare,
+      if (place.thoroughfare?.isNotEmpty == true) place.thoroughfare,
+      if (place.locality?.isNotEmpty == true) place.locality,
+    ].whereType<String>().join(', ');
+
+    if (address.isEmpty) address = 'Unknown Address';
+
+    bool isSaving = false;
+    bool isSaved = false;
+    Post? createdPost;
+    final TextEditingController _messageController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24.0,
+                right: 24.0,
+                top: 24.0,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Create Memory',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: TextEditingController(text: address),
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: 'Location',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      labelText: 'Memory Details',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    maxLines: 3,
+                    enabled: !isSaved && !isSaving,
+                  ),
+                  const SizedBox(height: 24),
+                  if (!isSaved)
+                    ElevatedButton(
+                      onPressed: isSaving ? null : () async {
+                        if (_messageController.text.isEmpty) return;
+                        setModalState(() => isSaving = true);
+                        try {
+                          final newPost = Post(
+                            latitude: coord.latitude,
+                            longitude: coord.longitude,
+                            messageContent: _messageController.text,
+                            creatorId: 'user_123',
+                            reach: 50,
+                            visibilityType: '1-to-many',
+                            isSafe: true,
+                            altitude: 0.0,
+                            placeName: address,
+                          );
+                          createdPost = await _apiService.createPost(newPost);
+                          setModalState(() {
+                            isSaved = true;
+                            isSaving = false;
+                          });
+                          _fetchProperties(coord.latitude, coord.longitude);
+                        } catch (e) {
+                          setModalState(() => isSaving = false);
+                          print('Failed to save post: $e');
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.blueAccent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: isSaving 
+                        ? const SizedBox(
+                            width: 24, 
+                            height: 24, 
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                          )
+                        : const Text('Save Post', style: TextStyle(fontSize: 18, color: Colors.white)),
+                    ),
+                  if (isSaved && createdPost != null)
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Map<String, dynamic> propertyData = {
+                          'id': createdPost!.id ?? '',
+                          'lat': createdPost!.latitude,
+                          'lng': createdPost!.longitude,
+                          'price': createdPost!.messageContent,
+                        };
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ArRevealScreen(propertyData: propertyData),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.view_in_ar, size: 24, color: Colors.white),
+                      label: const Text('View in AR', style: TextStyle(fontSize: 18, color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: Colors.green,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _setDarkMapStyle(GoogleMapController controller) {
     controller.setMapStyle('''
     [
@@ -256,9 +418,10 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: GoogleMap(
-        initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 18.5, tilt: 45.0),
+        initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 19.0, tilt: 45.0),
         markers: _markers,
         circles: _circles,
+        onTap: _handleMapTap,
         myLocationEnabled: _locationGranted,
         myLocationButtonEnabled: _locationGranted,
         zoomControlsEnabled: false,
