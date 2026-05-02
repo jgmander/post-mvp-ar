@@ -36,6 +36,7 @@ android {
     }
 
     val mapsApiKey = dartEnvironmentVariables["MAPS_API_KEY"] ?: localProperties.getProperty("MAPS_API_KEY") ?: ""
+    val mapId = dartEnvironmentVariables["MAP_ID"] ?: localProperties.getProperty("MAP_ID") ?: ""
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -57,6 +58,7 @@ android {
         versionName = flutter.versionName
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+        manifestPlaceholders["MAP_ID"] = mapId
     }
 
     buildTypes {
@@ -76,4 +78,5 @@ flutter {
 
 dependencies {
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    implementation("com.google.ar:core:1.41.0")
 }

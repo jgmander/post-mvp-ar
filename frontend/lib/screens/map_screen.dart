@@ -936,6 +936,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             zoomControlsEnabled: false,
             buildingsEnabled: true,
             mapType: MapType.normal,
+            cloudMapId: const String.fromEnvironment('MAP_ID', defaultValue: ''),
             onMapCreated: (controller) {
               _mapController = controller;
             },

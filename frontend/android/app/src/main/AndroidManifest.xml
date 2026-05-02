@@ -43,6 +43,7 @@
         <meta-data android:name="com.google.android.ar.API_KEY" android:value="\${MAPS_API_KEY}" />
         <meta-data android:name="com.google.ar.core.API_KEY" android:value="\${MAPS_API_KEY}" />
         <meta-data android:name="com.google.android.geo.API_KEY" android:value="\${MAPS_API_KEY}" />
+        <meta-data android:name="com.google.android.maps.v2.MAP_ID" android:value="\${MAP_ID}" />
         <meta-data android:name="io.flutter.embedding.android.EnableImpeller" android:value="false" />
     </application>
     <!-- Required to query activities that can process text, see:
