@@ -25,6 +25,7 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.postspatial.ar/geospatial"
     private var arSession: Session? = null
     private var methodChannel: MethodChannel? = null
+    private var isArEnabled = false
     
     // Live Tracking State Cache
     private var lastTrackingState: TrackingState? = null
@@ -99,16 +100,21 @@ class MainActivity : FlutterActivity() {
                     Log.e("MainActivity", "Error creating Earth anchor", e)
                     result.error("ANCHOR_ERROR", e.localizedMessage, null)
                 }
+            } else if (call.method == "startArSession") {
+                isArEnabled = true
+                startArSessionInternal()
+                result.success(true)
+            } else if (call.method == "stopArSession") {
+                isArEnabled = false
+                stopArSessionInternal()
+                result.success(true)
             } else {
                 result.notImplemented()
             }
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        
-        // Check permissions
+    private fun startArSessionInternal() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             
@@ -120,23 +126,12 @@ class MainActivity : FlutterActivity() {
             return
         }
         
-        // Initialize Session
         if (arSession == null) {
             try {
                 arSession = Session(this)
                 val config = Config(arSession)
                 config.geospatialMode = Config.GeospatialMode.ENABLED
                 arSession?.configure(config)
-            } catch (e: UnavailableArcoreNotInstalledException) {
-                Log.e("MainActivity", "Please install ARCore")
-            } catch (e: UnavailableUserDeclinedInstallationException) {
-                Log.e("MainActivity", "Please install ARCore")
-            } catch (e: UnavailableApkTooOldException) {
-                Log.e("MainActivity", "Please update ARCore")
-            } catch (e: UnavailableSdkTooOldException) {
-                Log.e("MainActivity", "Please update this app")
-            } catch (e: UnavailableDeviceNotCompatibleException) {
-                Log.e("MainActivity", "This device does not support AR")
             } catch (e: Exception) {
                 Log.e("MainActivity", "Failed to create AR session", e)
             }
@@ -146,6 +141,20 @@ class MainActivity : FlutterActivity() {
             arSession?.resume()
         } catch (e: Exception) {
             Log.e("MainActivity", "Failed to resume AR session", e)
+        }
+    }
+
+    private fun stopArSessionInternal() {
+        mainHandler.removeCallbacks(trackingStatePoller)
+        arSession?.pause()
+        arSession?.close()
+        arSession = null
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isArEnabled) {
+            startArSessionInternal()
         }
     }
 

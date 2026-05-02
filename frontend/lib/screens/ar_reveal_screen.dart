@@ -19,8 +19,10 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
   @override
   void initState() {
     super.initState();
+    platform.invokeMethod('startArSession').then((_) {
+      _triggerNativeARAnchor();
+    });
     _setupMethodChannelHandler();
-    _triggerNativeARAnchor();
   }
 
   void _setupMethodChannelHandler() {
@@ -67,6 +69,7 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
 
   @override
   void dispose() {
+    platform.invokeMethod('stopArSession');
     trackingState.dispose();
     super.dispose();
   }

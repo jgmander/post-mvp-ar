@@ -107,6 +107,7 @@ class _MapScreenState extends State<MapScreen> {
           target: LatLng(pos.latitude, pos.longitude),
           zoom: 19.0,
           tilt: 45.0,
+          bearing: pos.heading >= 0.0 ? pos.heading : 0.0,
         ),
       ),
     );
