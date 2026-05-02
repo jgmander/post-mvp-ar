@@ -329,7 +329,27 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.network(streetViewUrl, fit: BoxFit.cover),
+        Builder(
+          builder: (context) {
+            debugPrint('STREET VIEW URL: $streetViewUrl');
+            return Image.network(
+              streetViewUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('Street View Load Failed: $error');
+                return Container(
+                  color: const Color(0xFF1E2D5E), // Premium dark navy fallback
+                  child: GridPaper(
+                    color: Colors.white.withOpacity(0.1),
+                    divisions: 1,
+                    subdivisions: 1,
+                    interval: 28,
+                  ),
+                );
+              },
+            );
+          },
+        ),
         // Top scrim for badge legibility against bright sky
         Positioned(
           top: 0, left: 0, right: 0,

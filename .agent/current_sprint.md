@@ -2,6 +2,6 @@
 ## Delivered
 * (None)
 ## Current Phase
-* Sprint 3.47 - Dynamic Street View Hero Images
+* Sprint 3.48 - Street View Error Boundary
 ## Priorities
 * Establish Zero-Drift architecture
