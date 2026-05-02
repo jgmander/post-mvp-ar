@@ -890,30 +890,33 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _setDarkMapStyle(GoogleMapController controller) {
-    controller.setMapStyle('''
-    [
-      {"elementType":"geometry","stylers":[{"color":"#212121"}]},
-      {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
-      {"elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
-      {"elementType":"labels.text.stroke","stylers":[{"color":"#212121"}]},
-      {"featureType":"administrative","elementType":"geometry","stylers":[{"color":"#757575"}]},
-      {"featureType":"poi","elementType":"geometry","stylers":[{"color":"#181818"}]},
-      {"featureType":"poi","elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
-      {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#181818"}]},
-      {"featureType":"poi.park","elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},
-      {"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#2c2c2c"}]},
-      {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#8a8a8a"}]},
-      {"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#373737"}]},
-      {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#3c3c3c"}]},
-      {"featureType":"road.highway.controlled_access","elementType":"geometry","stylers":[{"color":"#4e4e4e"}]},
-      {"featureType":"road.local","elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},
-      {"featureType":"transit","elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
-      {"featureType":"water","elementType":"geometry","stylers":[{"color":"#000000"}]},
-      {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#3d3d3d"}]}
-    ]
-    ''');
-  }
+  // Building-safe dark map style.
+  // CRITICAL: The old style used {"elementType":"geometry"} globally, which
+  // flattened all 3D building meshes to #212121 — identical to road surface.
+  // This version surgically styles each featureType and explicitly gives
+  // landscape.man_made (buildings) a distinct elevated color so extruded
+  // meshes are visually separate from ground plane at tilt: 45.0.
+  static const String _kDarkMapStyle = '''
+  [
+    {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+    {"elementType":"labels.text.fill","stylers":[{"color":"#8896B0"}]},
+    {"elementType":"labels.text.stroke","stylers":[{"color":"#0D0F14"}]},
+    {"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#252D3F"}]},
+    {"featureType":"landscape","elementType":"geometry.fill","stylers":[{"color":"#161B25"}]},
+    {"featureType":"landscape.man_made","elementType":"geometry.fill","stylers":[{"color":"#1E2A40"}]},
+    {"featureType":"landscape.man_made","elementType":"geometry.stroke","stylers":[{"color":"#2A3A5C"},{"weight":"0.5"}]},
+    {"featureType":"poi","elementType":"geometry.fill","stylers":[{"color":"#111827"}]},
+    {"featureType":"poi.park","elementType":"geometry.fill","stylers":[{"color":"#0f1f1a"}]},
+    {"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#1E2433"}]},
+    {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#252D3F"}]},
+    {"featureType":"road.arterial","elementType":"geometry.fill","stylers":[{"color":"#252D3F"}]},
+    {"featureType":"road.highway","elementType":"geometry.fill","stylers":[{"color":"#2C3650"}]},
+    {"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#3A4A6A"}]},
+    {"featureType":"transit","elementType":"geometry.fill","stylers":[{"color":"#111827"}]},
+    {"featureType":"water","elementType":"geometry.fill","stylers":[{"color":"#040810"}]},
+    {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#252D3F"}]}
+  ]
+  ''';
 
   @override
   Widget build(BuildContext context) {
@@ -930,9 +933,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             zoomControlsEnabled: false,
             buildingsEnabled: true,
             mapType: MapType.normal,
+            style: _kDarkMapStyle,
             onMapCreated: (controller) {
               _mapController = controller;
-              _setDarkMapStyle(controller);
             },
           ),
           IgnorePointer(
