@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
@@ -190,6 +192,82 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  // ─── Price-Tag Pill Marker ─────────────────────────────────────────
+  Future<BitmapDescriptor> _buildPriceTagMarker(String label) async {
+    const double w = 108.0;
+    const double h = 44.0;
+    const double r = 10.0;
+    const double tipH = 8.0;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // Pill shadow
+    canvas.drawShadow(
+      Path()
+        ..addRRect(RRect.fromRectAndRadius(
+            Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)))
+        ..lineTo(w / 2 - 6, h)
+        ..lineTo(w / 2, h + tipH)
+        ..lineTo(w / 2 + 6, h),
+      Colors.black54,
+      4.0,
+      false,
+    );
+
+    // Pill background
+    final bg = Paint()..shader = const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [Color(0xFF1E2D5E), Color(0xFF0D1220)],
+    ).createShader(Rect.fromLTWH(0, 0, w, h));
+    final pillPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)))
+      ..moveTo(w / 2 - 6, h)
+      ..lineTo(w / 2, h + tipH)
+      ..lineTo(w / 2 + 6, h)
+      ..close();
+    canvas.drawPath(pillPath, bg);
+
+    // Brand border
+    canvas.drawPath(
+      pillPath,
+      Paint()
+        ..color = const Color(0xFF4F8EF7).withValues(alpha: 0.6)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+
+    // Price text
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, Offset((w - tp.width) / 2, (h - tp.height) / 2));
+
+    final img = await recorder.endRecording()
+        .toImage(w.toInt(), (h + tipH).toInt());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
+  }
+
+  String _formatPrice(String raw) {
+    final num = double.tryParse(raw.replaceAll(RegExp(r'[^0-9.]'), ''));
+    if (num == null || num == 0) return raw.isNotEmpty ? raw : 'Listing';
+    if (num >= 1000000) return '\$${(num / 1000000).toStringAsFixed(1)}M';
+    if (num >= 1000) return '\$${(num / 1000).round()}K';
+    return '\$${num.round()}';
+  }
+
   void _animateToPosition(Position pos) {
     _mapController?.animateCamera(
       CameraUpdate.newCameraPosition(
@@ -231,11 +309,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         final centerPost = cluster.first;
         final centerLatLng = LatLng(centerPost.latitude, centerPost.longitude);
 
+        // Price-tag marker
+        final markerIcon = await _buildPriceTagMarker(_formatPrice(centerPost.messageContent));
         newMarkers.add(
           Marker(
             markerId: MarkerId(centerPost.id ?? "cluster_${centerPost.latitude}_${centerPost.longitude}"),
             position: centerLatLng,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+            icon: markerIcon,
+            anchor: const Offset(0.5, 1.0),
             onTap: () {
               _showPropertyBottomSheet(cluster);
             },
@@ -276,6 +357,112 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  // Hero gradient palettes for POC image variety
+  static const _heroGradients = [
+    [Color(0xFF1a2744), Color(0xFF0D2137)],
+    [Color(0xFF1f2d1f), Color(0xFF091510)],
+    [Color(0xFF2d1f1f), Color(0xFF100808)],
+    [Color(0xFF2a1f35), Color(0xFF0d0810)],
+  ];
+
+  Widget _buildHeroImage(int idx) {
+    final g = _heroGradients[idx % _heroGradients.length];
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: g,
+            ),
+          ),
+        ),
+        // Faint grid overlay for architectural feel
+        Opacity(
+          opacity: 0.15,
+          child: GridPaper(
+            color: _PostColors.brand,
+            divisions: 1,
+            subdivisions: 1,
+            interval: 28,
+          ),
+        ),
+        // Top scrim for badge legibility
+        Positioned(
+          top: 0, left: 0, right: 0,
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.black.withValues(alpha: 0.65), Colors.transparent],
+              ),
+            ),
+          ),
+        ),
+        // ACTIVE badge
+        Positioned(
+          top: 14, left: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF27AE60),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.circle, color: Colors.white, size: 6),
+                SizedBox(width: 5),
+                Text('ACTIVE LISTING', style: TextStyle(
+                  color: Colors.white, fontSize: 10,
+                  fontWeight: FontWeight.w700, letterSpacing: 1.0)),
+              ],
+            ),
+          ),
+        ),
+        // 3D Spatial badge
+        Positioned(
+          top: 14, right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: _PostColors.brand.withValues(alpha: 0.88),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 11),
+                SizedBox(width: 4),
+                Text('3D', style: TextStyle(
+                  color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _statChip(String value, String label) => RichText(
+    text: TextSpan(children: [
+      TextSpan(text: value, style: const TextStyle(
+        color: _PostColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+      TextSpan(text: ' $label', style: const TextStyle(
+        color: _PostColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w400)),
+    ]),
+  );
+
+  Widget _vDivider() => Container(
+    margin: const EdgeInsets.symmetric(horizontal: 10),
+    width: 1, height: 14,
+    color: _PostColors.divider,
+  );
+
   void _showPropertyBottomSheet(List<Post> cluster) {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
@@ -286,149 +473,186 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         int currentPage = 0;
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: _PostColors.surface,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Drag handle
-                  Center(
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 14),
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: _PostColors.divider,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  // Cluster badge
-                  if (cluster.length > 1)
-                    Align(
-                      alignment: Alignment.centerLeft,
+            final p = cluster[currentPage];
+            final propertyData = {
+              'id': p.id ?? '',
+              'lat': p.latitude,
+              'lng': p.longitude,
+              'price': p.messageContent,
+            };
+            return FractionallySizedBox(
+              heightFactor: 0.68,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: _PostColors.surface,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  children: [
+                    // ── Drag Handle ──────────────────────
+                    Center(
                       child: Container(
-                        margin: const EdgeInsets.only(bottom: 14),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        margin: const EdgeInsets.only(top: 12, bottom: 6),
+                        width: 40, height: 4,
                         decoration: BoxDecoration(
-                          color: _PostColors.brand.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: _PostColors.brand.withValues(alpha: 0.4), width: 1),
-                        ),
-                        child: Text(
-                          '${cluster.length} Listings at this location',
-                          style: const TextStyle(color: _PostColors.brand, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5),
+                          color: _PostColors.divider,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
-                  // PageView cards
-                  SizedBox(
-                    height: 200,
-                    child: PageView.builder(
-                      itemCount: cluster.length,
-                      onPageChanged: (i) => setModalState(() => currentPage = i),
-                      itemBuilder: (context, index) {
-                        final p = cluster[index];
-                        final propertyData = {
-                          'id': p.id ?? '',
-                          'lat': p.latitude,
-                          'lng': p.longitude,
-                          'price': p.messageContent,
-                        };
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+
+                    // ── Hero Carousel 40% ────────────────
+                    Expanded(
+                      flex: 40,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                        child: Stack(
                           children: [
-                            // Address row
+                            PageView.builder(
+                              itemCount: cluster.length,
+                              onPageChanged: (i) => setModalState(() => currentPage = i),
+                              itemBuilder: (_, i) => _buildHeroImage(i),
+                            ),
+                            if (cluster.length > 1)
+                              Positioned(
+                                bottom: 10, left: 0, right: 0,
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: List.generate(cluster.length, (i) =>
+                                    AnimatedContainer(
+                                      duration: const Duration(milliseconds: 250),
+                                      margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                                      width: currentPage == i ? 18 : 5,
+                                      height: 5,
+                                      decoration: BoxDecoration(
+                                        color: currentPage == i
+                                            ? Colors.white
+                                            : Colors.white.withValues(alpha: 0.4),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    )
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // ── Data Hierarchy 60% ───────────────
+                    Expanded(
+                      flex: 60,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Price
+                            Text(
+                              _formatPrice(p.messageContent),
+                              style: const TextStyle(
+                                color: _PostColors.textPrimary,
+                                fontSize: 30,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.5,
+                                height: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            // Beds / Baths / Sqft
+                            IntrinsicHeight(
+                              child: Row(
+                                children: [
+                                  _statChip('3', 'bds'),
+                                  _vDivider(),
+                                  _statChip('2', 'ba'),
+                                  _vDivider(),
+                                  _statChip('1,425', 'sqft'),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            // Address
+                            Text(
+                              p.messageContent.isNotEmpty ? p.messageContent
+                                  : '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
+                              style: const TextStyle(
+                                color: _PostColors.textSecondary,
+                                fontSize: 13, height: 1.4,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 5),
+                            // Attribution
                             Row(
                               children: [
                                 Container(
-                                  width: 36, height: 36,
-                                  decoration: BoxDecoration(
-                                    color: _PostColors.brand.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: const Icon(Icons.location_on_rounded, color: _PostColors.brand, size: 18),
+                                  width: 5, height: 5,
+                                  decoration: const BoxDecoration(
+                                    color: _PostColors.brand, shape: BoxShape.circle),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    p.messageContent,
-                                    style: const TextStyle(
-                                      color: _PostColors.textPrimary,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.2,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                const SizedBox(width: 6),
+                                const Text(
+                                  'Listing by: Post Spatial Brokerage',
+                                  style: TextStyle(
+                                    color: _PostColors.brand, fontSize: 11,
+                                    fontWeight: FontWeight.w500, letterSpacing: 0.2),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 20),
-                            // AR Button — premium glow
-                            GestureDetector(
-                              onTap: () {
-                                HapticFeedback.heavyImpact();
-                                Navigator.pop(context);
-                                Navigator.push(context, MaterialPageRoute(
-                                  builder: (_) => ArRevealScreen(propertyData: propertyData),
-                                ));
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 17),
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [Color(0xFF3A6FD8), Color(0xFF4F8EF7)],
+                            const Spacer(),
+                            // ── AR CTA ───────────────────
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 20),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _PostColors.brand.withValues(alpha: 0.38),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 8),
                                   ),
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: _PostColors.brand.withValues(alpha: 0.35),
-                                      blurRadius: 20,
-                                      offset: const Offset(0, 8),
+                                ],
+                              ),
+                              child: GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.heavyImpact();
+                                  Navigator.pop(context);
+                                  Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => ArRevealScreen(propertyData: propertyData),
+                                  ));
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 18),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [Color(0xFF3A6FD8), Color(0xFF5A9EFF)],
                                     ),
-                                  ],
-                                ),
-                                child: const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 22),
-                                    SizedBox(width: 10),
-                                    Text('View in AR',
-                                      style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
-                                  ],
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 24),
+                                      SizedBox(width: 12),
+                                      Text('View Property in AR',
+                                        style: TextStyle(
+                                          color: Colors.white, fontSize: 17,
+                                          fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
                           ],
-                        );
-                      },
-                    ),
-                  ),
-                  // Page dots
-                  if (cluster.length > 1)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(cluster.length, (i) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 250),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: currentPage == i ? 20 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: currentPage == i ? _PostColors.brand : _PostColors.divider,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        )),
+                        ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
             );
           },
