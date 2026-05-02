@@ -677,6 +677,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       builder: (context) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
+            const String mapsApiKey = String.fromEnvironment('MAPS_API_KEY', defaultValue: '');
+            final streetViewUrl = 'https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${coord.latitude},${coord.longitude}&fov=90&pitch=0&key=$mapsApiKey';
+
             return Container(
               decoration: const BoxDecoration(
                 color: Colors.white,
@@ -684,7 +687,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-                left: 24, right: 24, top: 0,
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -701,29 +703,92 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  // Header row
-                  Row(
-                    children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4F8EF7).withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(12),
+                  // Hero Image Area
+                  SizedBox(
+                    height: 220,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Builder(
+                          builder: (context) {
+                            return Image.network(
+                              streetViewUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: const Color(0xFF1E2D5E), // Premium dark navy fallback
+                                  child: GridPaper(
+                                    color: Colors.white.withOpacity(0.1),
+                                    divisions: 1,
+                                    subdivisions: 1,
+                                    interval: 28,
+                                  ),
+                                );
+                              },
+                            );
+                          },
                         ),
-                        child: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF4F8EF7), size: 20),
-                      ),
-                      const SizedBox(width: 14),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Create Listing',
-                            style: TextStyle(color: Color(0xFF0D1220), fontSize: 18, fontWeight: FontWeight.w700)),
-                          Text('Property confirmed',
-                            style: TextStyle(color: Color(0xFF6B7A99), fontSize: 12)),
-                        ],
-                      ),
-                    ],
+                        // Top scrim
+                        Positioned(
+                          top: 0, left: 0, right: 0,
+                          child: Container(
+                            height: 80,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Bottom scrim
+                        Positioned(
+                          bottom: 0, left: 0, right: 0,
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [Colors.black.withValues(alpha: 0.75), Colors.transparent],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 20),
+                  // Content with Padding
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Header row
+                        Row(
+                          children: [
+                            Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4F8EF7).withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF4F8EF7), size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                            const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Create Listing',
+                                  style: TextStyle(color: Color(0xFF0D1220), fontSize: 18, fontWeight: FontWeight.w700)),
+                                Text('Property confirmed',
+                                  style: TextStyle(color: Color(0xFF6B7A99), fontSize: 12)),
+                              ],
+                            ),
+                          ],
+                        ),
                   const SizedBox(height: 20),
                   // Address chip
                   Container(
@@ -859,7 +924,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         ),
                       ),
                     ),
-                ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
