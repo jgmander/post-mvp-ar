@@ -72,29 +72,43 @@ class _MapScreenState extends State<MapScreen> {
       Set<Marker> newMarkers = {};
       Set<Circle> newCircles = {};
       
+      List<List<Post>> clusters = [];
       for (var p in posts) {
-        Map<String, dynamic> propertyData = {
-          'id': p.id ?? '',
-          'lat': p.latitude,
-          'lng': p.longitude,
-          'price': p.messageContent,
-        };
+        bool clustered = false;
+        for (var cluster in clusters) {
+          final center = cluster.first;
+          double distance = Geolocator.distanceBetween(
+              center.latitude, center.longitude, p.latitude, p.longitude);
+          if (distance <= 8.0) {
+            cluster.add(p);
+            clustered = true;
+            break;
+          }
+        }
+        if (!clustered) {
+          clusters.add([p]);
+        }
+      }
+
+      for (var cluster in clusters) {
+        final centerPost = cluster.first;
+        final centerLatLng = LatLng(centerPost.latitude, centerPost.longitude);
 
         newMarkers.add(
           Marker(
-            markerId: MarkerId(p.id ?? "post_${p.latitude}_${p.longitude}"),
-            position: LatLng(p.latitude, p.longitude),
+            markerId: MarkerId(centerPost.id ?? "cluster_${centerPost.latitude}_${centerPost.longitude}"),
+            position: centerLatLng,
             icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
             onTap: () {
-              _showPropertyBottomSheet(propertyData);
+              _showPropertyBottomSheet(cluster);
             },
           ),
         );
 
         newCircles.add(
           Circle(
-            circleId: CircleId(p.id ?? "circle_${p.latitude}_${p.longitude}"),
-            center: LatLng(p.latitude, p.longitude),
+            circleId: CircleId(centerPost.id ?? "circle_${centerPost.latitude}_${centerPost.longitude}"),
+            center: centerLatLng,
             radius: 15.0,
             fillColor: Colors.blueAccent.withOpacity(0.2),
             strokeColor: Colors.blueAccent,
@@ -114,46 +128,100 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showPropertyBottomSheet(Map<String, dynamic> data) {
+  void _showPropertyBottomSheet(List<Post> cluster) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                data['price'] ?? 'Unknown Price',
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context); // Close bottom sheet
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ArRevealScreen(propertyData: data),
+        int _currentPage = 0;
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SizedBox(
+                    height: 160,
+                    child: PageView.builder(
+                      itemCount: cluster.length,
+                      onPageChanged: (int index) {
+                        setModalState(() {
+                          _currentPage = index;
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        final p = cluster[index];
+                        Map<String, dynamic> propertyData = {
+                          'id': p.id ?? '',
+                          'lat': p.latitude,
+                          'lng': p.longitude,
+                          'price': p.messageContent,
+                        };
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              p.messageContent,
+                              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context); // Close bottom sheet
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ArRevealScreen(propertyData: propertyData),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.view_in_ar, size: 24, color: Colors.white),
+                              label: const Text('View in AR', style: TextStyle(fontSize: 18, color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                backgroundColor: Colors.blueAccent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                  );
-                },
-                icon: const Icon(Icons.view_in_ar, size: 24, color: Colors.white),
-                label: const Text('View in AR', style: TextStyle(fontSize: 18, color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.blueAccent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
+                  if (cluster.length > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(
+                          cluster.length,
+                          (index) => Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                            width: 8.0,
+                            height: 8.0,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: _currentPage == index
+                                  ? Colors.blueAccent
+                                  : Colors.grey.shade400,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
