@@ -88,7 +88,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   final LatLng _initialPosition = const LatLng(40.7251, -73.7055);
   Set<Marker> _markers = {};
-  Set<Circle> _circles = {};
   bool _locationGranted = false;
 
   bool _isBooting = true;
@@ -195,64 +194,45 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   // ─── Price-Tag Pill Marker ─────────────────────────────────────────
   Future<BitmapDescriptor> _buildPriceTagMarker(String label) async {
-    const double w = 108.0;
-    const double h = 44.0;
-    const double r = 10.0;
-    const double tipH = 8.0;
+    const double w = 160.0;
+    const double h = 60.0;
+    const double r = 30.0;
+    const double tipH = 12.0;
 
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // Pill shadow
-    canvas.drawShadow(
-      Path()
-        ..addRRect(RRect.fromRectAndRadius(
-            Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)))
-        ..lineTo(w / 2 - 6, h)
-        ..lineTo(w / 2, h + tipH)
-        ..lineTo(w / 2 + 6, h),
-      Colors.black54,
-      4.0,
-      false,
-    );
-
-    // Pill background
-    final bg = Paint()..shader = const LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [Color(0xFF1E2D5E), Color(0xFF0D1220)],
-    ).createShader(Rect.fromLTWH(0, 0, w, h));
+    // Pill path with downward triangle tip
     final pillPath = Path()
       ..addRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)))
-      ..moveTo(w / 2 - 6, h)
+      ..moveTo(w / 2 - 12, h)
       ..lineTo(w / 2, h + tipH)
-      ..lineTo(w / 2 + 6, h)
+      ..lineTo(w / 2 + 12, h)
       ..close();
+
+    // Heavy blurred drop shadow for lift
+    canvas.drawShadow(pillPath, Colors.black, 12.0, false);
+
+    // High-contrast stark white pill background
+    final bg = Paint()..color = Colors.white;
     canvas.drawPath(pillPath, bg);
 
-    // Brand border
-    canvas.drawPath(
-      pillPath,
-      Paint()
-        ..color = const Color(0xFF4F8EF7).withValues(alpha: 0.6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
-
-    // Price text
+    // Zillow-tier Typography: Massive, dark, heavy weight
     final tp = TextPainter(
       text: TextSpan(
         text: label,
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.3,
+          color: Color(0xFF0D1220), // Dark charcoal/brand black
+          fontSize: 24,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
         ),
       ),
       textDirection: TextDirection.ltr,
     );
     tp.layout();
+    
+    // Perfectly centered within the pill body (ignoring the tip)
     tp.paint(canvas, Offset((w - tp.width) / 2, (h - tp.height) / 2));
 
     final img = await recorder.endRecording()
@@ -286,7 +266,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     try {
       final posts = await _apiService.getNearbyPosts(lat, lng, radiusKm: 10.0);
       Set<Marker> newMarkers = {};
-      Set<Circle> newCircles = {};
       
       List<List<Post>> clusters = [];
       for (var p in posts) {
@@ -323,34 +302,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             },
           ),
         );
-
-        newCircles.add(
-          Circle(
-            circleId: CircleId(centerPost.id ?? "circle_${centerPost.latitude}_${centerPost.longitude}"),
-            center: centerLatLng,
-            radius: 15.0,
-            fillColor: const Color(0x224F8EF7),
-            strokeColor: const Color(0xFF4F8EF7),
-            strokeWidth: 2,
-          ),
-        );
-        // Outer halo
-        newCircles.add(
-          Circle(
-            circleId: CircleId('halo_${centerPost.id ?? "${centerPost.latitude}_${centerPost.longitude}"}'),
-            center: centerLatLng,
-            radius: 24.0,
-            fillColor: const Color(0x0A4F8EF7),
-            strokeColor: const Color(0x554F8EF7),
-            strokeWidth: 1,
-          ),
-        );
       }
 
       if (mounted) {
         setState(() {
           _markers = newMarkers;
-          _circles = newCircles;
         });
       }
     } catch (e) {
@@ -930,7 +886,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           GoogleMap(
             initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 19.5, tilt: 45.0),
             markers: _markers,
-            circles: _circles,
             onTap: _handleMapTap,
             myLocationEnabled: _locationGranted,
             myLocationButtonEnabled: _locationGranted,
