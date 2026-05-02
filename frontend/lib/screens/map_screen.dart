@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
@@ -20,10 +21,34 @@ class _MapScreenState extends State<MapScreen> {
   Set<Circle> _circles = {};
   bool _locationGranted = false;
 
+  bool _isBooting = true;
+  Timer? _bootTimer;
+  int _bootTextIndex = 0;
+  final List<String> _bootTexts = [
+    "Initializing spatial grid...",
+    "Acquiring satellite lock...",
+    "Resolving architectural entities..."
+  ];
+  String _currentBootText = "Initializing spatial grid...";
+
   @override
   void initState() {
     super.initState();
+    _bootTimer = Timer.periodic(const Duration(milliseconds: 1200), (timer) {
+      if (mounted) {
+        setState(() {
+          _bootTextIndex = (_bootTextIndex + 1) % _bootTexts.length;
+          _currentBootText = _bootTexts[_bootTextIndex];
+        });
+      }
+    });
     _requestPermissionsAndCenter();
+  }
+
+  @override
+  void dispose() {
+    _bootTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _requestPermissionsAndCenter() async {
@@ -46,13 +71,32 @@ class _MapScreenState extends State<MapScreen> {
         );
         _animateToPosition(precise);
         _fetchProperties(precise.latitude, precise.longitude);
+        
+        if (mounted) {
+          setState(() {
+            _isBooting = false;
+            _bootTimer?.cancel();
+          });
+        }
       } else {
         // Fallback fetch if permission denied
         _fetchProperties(_initialPosition.latitude, _initialPosition.longitude);
+        if (mounted) {
+          setState(() {
+            _isBooting = false;
+            _bootTimer?.cancel();
+          });
+        }
       }
     } catch (e) {
       print("Location permission or fetch failed: $e");
       _fetchProperties(_initialPosition.latitude, _initialPosition.longitude);
+      if (mounted) {
+        setState(() {
+          _isBooting = false;
+          _bootTimer?.cancel();
+        });
+      }
     }
   }
 
@@ -417,19 +461,51 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GoogleMap(
-        initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 19.0, tilt: 45.0),
-        markers: _markers,
-        circles: _circles,
-        onTap: _handleMapTap,
-        myLocationEnabled: _locationGranted,
-        myLocationButtonEnabled: _locationGranted,
-        zoomControlsEnabled: false,
-        mapType: MapType.normal,
-        onMapCreated: (controller) {
-          _mapController = controller;
-          _setDarkMapStyle(controller);
-        },
+      body: Stack(
+        children: [
+          GoogleMap(
+            initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 19.0, tilt: 45.0),
+            markers: _markers,
+            circles: _circles,
+            onTap: _handleMapTap,
+            myLocationEnabled: _locationGranted,
+            myLocationButtonEnabled: _locationGranted,
+            zoomControlsEnabled: false,
+            mapType: MapType.normal,
+            onMapCreated: (controller) {
+              _mapController = controller;
+              _setDarkMapStyle(controller);
+            },
+          ),
+          IgnorePointer(
+            ignoring: !_isBooting,
+            child: AnimatedOpacity(
+              opacity: _isBooting ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 800),
+              child: Container(
+                color: const Color(0xFF121212),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(color: Colors.blueAccent),
+                      const SizedBox(height: 24),
+                      Text(
+                        _currentBootText,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                          letterSpacing: 1.2,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
