@@ -17,7 +17,11 @@ import SceneKit
     GMSServices.provideAPIKey(apiKey)
     print("DEBUG: [Post] AppDelegate GMSServices.provideAPIKey initialized for iOS")
     
-    let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // MARK: - Safe MethodChannel Bridge
+  func setupARKitChannel(controller: FlutterViewController) {
     self.methodChannel = FlutterMethodChannel(name: "com.postspatial.ar/geospatial",
                                               binaryMessenger: controller.binaryMessenger)
     
@@ -40,34 +44,37 @@ import SceneKit
           result(FlutterError(code: "INVALID_ARGUMENT", message: "Missing arguments", details: nil))
           return
         }
-        print("DEBUG: [Post] Received anchorModel call: lat=\\(lat), lng=\\(lng), assetPath=\\(assetPath)")
+        print("DEBUG: [Post] Received anchorModel call: lat=\(lat), lng=\(lng), assetPath=\(assetPath)")
         
         self.methodChannel?.invokeMethod("onTrackingStateChanged", arguments: "LOCALIZING")
 
         // Start ARGeoTracking if supported
-        if ARGeoTrackingConfiguration.isSupported {
-            let config = ARGeoTrackingConfiguration()
-            self.arView?.session.run(config)
-            
-            // Create ARGeoAnchor
-            let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
-            let geoAnchor = ARGeoAnchor(coordinate: coordinate)
-            self.arView?.session.add(anchor: geoAnchor)
-            print("DEBUG: [Post] Added ARGeoAnchor at \\(lat), \\(lng)")
-            result(true)
+        if #available(iOS 14.0, *) {
+            if ARGeoTrackingConfiguration.isSupported {
+                let config = ARGeoTrackingConfiguration()
+                self.arView?.session.run(config)
+                
+                // Create ARGeoAnchor
+                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                let geoAnchor = ARGeoAnchor(coordinate: coordinate)
+                self.arView?.session.add(anchor: geoAnchor)
+                print("DEBUG: [Post] Added ARGeoAnchor at \(lat), \(lng)")
+                result(true)
+            } else {
+                result(FlutterError(code: "UNSUPPORTED", message: "ARGeoTrackingConfiguration is not supported on this device.", details: nil))
+            }
         } else {
-            result(FlutterError(code: "UNSUPPORTED", message: "ARGeoTrackingConfiguration is not supported on this device.", details: nil))
+            result(FlutterError(code: "UNSUPPORTED", message: "iOS 14.0 or newer is required for ARGeoTracking.", details: nil))
         }
       } else {
         result(FlutterMethodNotImplemented)
       }
     })
-
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   // MARK: - ARSessionDelegate
-  func session(_ session: ARSession, didChangeGeoTrackingStatus geoTrackingStatus: ARGeoTrackingStatus) {
+  @available(iOS 14.0, *)
+  func session(_ session: ARSession, didChange geoTrackingStatus: ARGeoTrackingStatus) {
       let stateString: String
       switch geoTrackingStatus.state {
       case .notAvailable:
@@ -86,11 +93,15 @@ import SceneKit
 
   // MARK: - ARSCNViewDelegate
   func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-      guard let geoAnchor = anchor as? ARGeoAnchor else { return nil }
-      print("DEBUG: [Post] Rendering node for ARGeoAnchor at \\(geoAnchor.coordinate.latitude), \\(geoAnchor.coordinate.longitude)")
-      
-      // Load the .usdz asset from the flutter bundle
-      return SCNNode()
+      if #available(iOS 14.0, *) {
+          guard let geoAnchor = anchor as? ARGeoAnchor else { return nil }
+          print("DEBUG: [Post] Rendering node for ARGeoAnchor at \(geoAnchor.coordinate.latitude), \(geoAnchor.coordinate.longitude)")
+          
+          // Load the .usdz asset from the flutter bundle
+          return SCNNode()
+      } else {
+          return nil
+      }
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
