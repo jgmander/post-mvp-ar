@@ -195,7 +195,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       CameraUpdate.newCameraPosition(
         CameraPosition(
           target: LatLng(pos.latitude, pos.longitude),
-          zoom: 19.0,
+          zoom: 19.5,
           tilt: 45.0,
           bearing: pos.heading >= 0.0 ? pos.heading : 0.0,
         ),
@@ -320,7 +320,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           border: Border.all(color: _PostColors.brand.withValues(alpha: 0.4), width: 1),
                         ),
                         child: Text(
-                          '${cluster.length} properties at this location',
+                          '${cluster.length} Listings at this location',
                           style: const TextStyle(color: _PostColors.brand, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.5),
                         ),
                       ),
@@ -517,8 +517,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       const Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Drop a Memory', style: TextStyle(color: _PostColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                          Text('Structure confirmed', style: TextStyle(color: _PostColors.textSecondary, fontSize: 12)),
+                          Text('Create Listing', style: TextStyle(color: _PostColors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                          Text('Property confirmed', style: TextStyle(color: _PostColors.textSecondary, fontSize: 12)),
                         ],
                       ),
                     ],
@@ -612,7 +612,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           child: isSaving
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('Save Memory',
+                            : const Text('Save Listing',
                                 style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
                         ),
                       ),
@@ -697,13 +697,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       body: Stack(
         children: [
           GoogleMap(
-            initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 19.0, tilt: 45.0),
+            initialCameraPosition: CameraPosition(target: _initialPosition, zoom: 19.5, tilt: 45.0),
             markers: _markers,
             circles: _circles,
             onTap: _handleMapTap,
             myLocationEnabled: _locationGranted,
             myLocationButtonEnabled: _locationGranted,
             zoomControlsEnabled: false,
+            buildingsEnabled: true,
             mapType: MapType.normal,
             onMapCreated: (controller) {
               _mapController = controller;
