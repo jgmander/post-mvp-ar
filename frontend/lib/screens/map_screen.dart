@@ -1001,24 +1001,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             child: FloatingActionButton(
               heroTag: 'arToggleBtn',
               backgroundColor: _PostColors.brand,
-              onPressed: () async {
-                HapticFeedback.lightImpact();
-                if (_mapController != null) {
-                  LatLngBounds bounds = await _mapController!.getVisibleRegion();
-                  LatLng center = LatLng(
-                    (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
-                    (bounds.northeast.longitude + bounds.southwest.longitude) / 2
-                  );
-                  _mapController!.animateCamera(
-                    CameraUpdate.newCameraPosition(
-                      CameraPosition(
-                        target: center,
-                        zoom: 19.5,
-                        tilt: 45.0,
-                      ),
-                    ),
-                  );
-                }
+              onPressed: () {
+                HapticFeedback.heavyImpact();
+                Navigator.push(context, PageRouteBuilder(
+                  opaque: false,
+                  pageBuilder: (_, __, ___) => const ArView(),
+                ));
               },
               child: const Icon(
                 Icons.view_in_ar_rounded,
