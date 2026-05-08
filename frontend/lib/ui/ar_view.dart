@@ -693,7 +693,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           // AR Camera Feed - Isolated at the absolute base

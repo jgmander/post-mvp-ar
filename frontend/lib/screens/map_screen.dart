@@ -570,8 +570,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 onTap: () {
                                   HapticFeedback.heavyImpact();
                                   Navigator.pop(context);
-                                  Navigator.push(context, MaterialPageRoute(
-                                    builder: (_) => ArRevealScreen(propertyData: propertyData),
+                                  Navigator.push(context, PageRouteBuilder(
+                                    opaque: false,
+                                    pageBuilder: (_, __, ___) => ArRevealScreen(propertyData: propertyData),
                                   ));
                                 },
                                 child: Container(
@@ -872,8 +873,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       onTap: () {
                         HapticFeedback.heavyImpact();
                         Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(
-                          builder: (_) => ArRevealScreen(propertyData: {
+                        Navigator.push(context, PageRouteBuilder(
+                          opaque: false,
+                          pageBuilder: (_, __, ___) => ArRevealScreen(propertyData: {
                             'id': createdPost!.id ?? '',
                             'lat': createdPost!.latitude,
                             'lng': createdPost!.longitude,

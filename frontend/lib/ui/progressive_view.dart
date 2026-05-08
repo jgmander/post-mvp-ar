@@ -109,7 +109,10 @@ class _ProgressiveViewState extends State<ProgressiveView> {
   void _openArView() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ArView()),
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (_, __, ___) => ArView(),
+      ),
     );
   }
 
