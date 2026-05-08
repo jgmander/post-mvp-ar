@@ -968,8 +968,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           Positioned(
             bottom: 100,
             right: 16,
-            child: GestureDetector(
-              onTap: () async {
+            child: FloatingActionButton(
+              heroTag: 'myLocationBtn',
+              backgroundColor: Colors.white,
+              onPressed: () async {
                 HapticFeedback.lightImpact();
                 try {
                   Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
@@ -986,33 +988,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   debugPrint('Error fetching location: $e');
                 }
               },
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.my_location,
-                  color: Color(0xFF0D1220), // Dark charcoal
-                  size: 26,
-                ),
+              child: const Icon(
+                Icons.my_location,
+                color: Color(0xFF0D1220), // Dark charcoal
+                size: 26,
               ),
             ),
           ),
           Positioned(
             bottom: 170,
             right: 16,
-            child: GestureDetector(
-              onTap: () async {
+            child: FloatingActionButton(
+              heroTag: 'arToggleBtn',
+              backgroundColor: _PostColors.brand,
+              onPressed: () async {
                 HapticFeedback.lightImpact();
                 if (_mapController != null) {
                   LatLngBounds bounds = await _mapController!.getVisibleRegion();
@@ -1031,25 +1020,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   );
                 }
               },
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: _PostColors.brand,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: _PostColors.brand.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.view_in_ar_rounded,
-                  color: Colors.white,
-                  size: 26,
-                ),
+              child: const Icon(
+                Icons.view_in_ar_rounded,
+                color: Colors.white,
+                size: 26,
               ),
             ),
           ),
