@@ -10,7 +10,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
-import 'ar_reveal_screen.dart';
+import '../ui/ar_view.dart';
 
 // ─── Brand Design Tokens ────────────────────────────────────────────────────
 class _PostColors {
@@ -572,7 +572,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                   Navigator.pop(context);
                                   Navigator.push(context, PageRouteBuilder(
                                     opaque: false,
-                                    pageBuilder: (_, __, ___) => ArRevealScreen(propertyData: propertyData),
+                                    pageBuilder: (_, __, ___) => const ArView(),
                                   ));
                                 },
                                 child: Container(
@@ -875,12 +875,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         Navigator.pop(context);
                         Navigator.push(context, PageRouteBuilder(
                           opaque: false,
-                          pageBuilder: (_, __, ___) => ArRevealScreen(propertyData: {
-                            'id': createdPost!.id ?? '',
-                            'lat': createdPost!.latitude,
-                            'lng': createdPost!.longitude,
-                            'price': createdPost!.messageContent,
-                          }),
+                          pageBuilder: (_, __, ___) => const ArView(),
                         ));
                       },
                       child: Container(
