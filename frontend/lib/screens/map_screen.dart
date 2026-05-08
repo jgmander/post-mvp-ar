@@ -381,7 +381,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               children: [
                 Icon(Icons.circle, color: Colors.white, size: 6),
                 SizedBox(width: 5),
-                Text('ACTIVE MEMORY', style: TextStyle(
+                Text('ACTIVE POST', style: TextStyle(
                   color: Colors.white, fontSize: 10,
                   fontWeight: FontWeight.w700, letterSpacing: 1.0)),
               ],
@@ -589,7 +589,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                     children: [
                                       Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 24),
                                       SizedBox(width: 12),
-                                      Text('View Memory in AR',
+                                      Text('View Post in AR',
                                         style: TextStyle(
                                           color: Colors.white, fontSize: 17,
                                           fontWeight: FontWeight.w700, letterSpacing: 0.3)),
@@ -764,7 +764,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Drop Memory',
+                                Text('Drop a Post',
                                   style: TextStyle(color: Color(0xFF0D1220), fontSize: 18, fontWeight: FontWeight.w700)),
                                 Text('Location acquired',
                                   style: TextStyle(color: Color(0xFF6B7A99), fontSize: 12)),
@@ -798,7 +798,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     maxLines: 3,
                     style: const TextStyle(color: Color(0xFF0D1220), fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'Caption your memory...',
+                      hintText: 'Caption your post...',
                       hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14),
                       filled: true,
                       fillColor: const Color(0xFFF4F6FB),
@@ -862,7 +862,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           child: isSaving
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('Drop Memory',
+                            : const Text('Drop Post',
                                 style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
                         ),
                       ),
@@ -1049,7 +1049,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   ],
                 ),
                 child: const Icon(
-                  Icons.3d_rotation,
+                  Icons.view_in_ar_rounded,
                   color: Colors.white,
                   size: 26,
                 ),

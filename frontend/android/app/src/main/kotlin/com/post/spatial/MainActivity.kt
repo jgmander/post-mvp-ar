@@ -203,4 +203,15 @@ class MainActivity : FlutterActivity() {
         arSession?.close()
         super.onDestroy()
     }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1 && grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            if (isArEnabled) {
+                startArSessionInternal()
+            }
+        } else {
+            Log.e("MainActivity", "Camera or Location permission denied.")
+        }
+    }
 }

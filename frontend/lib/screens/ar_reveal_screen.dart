@@ -57,7 +57,7 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
       scheme: 'sms',
       path: phone,
       queryParameters: <String, String>{
-        'body': "Hi, I'm standing outside the property and I'd like to schedule a tour.",
+        'body': "Hi, I'm standing at your post and I'd like to connect.",
       },
     );
     if (await canLaunchUrl(smsUri)) {
@@ -129,7 +129,7 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
                         SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Location Found. Anchoring Property Data.',
+                            'Location Found. Anchoring Post Data.',
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                           ),
                         ),
@@ -155,12 +155,12 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    widget.propertyData['price'] ?? 'Unknown Price',
+                    widget.propertyData['price'] ?? 'Unknown Caption',
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
                   Text(
-                    "${widget.propertyData['beds'] ?? 0} Beds, ${widget.propertyData['baths'] ?? 0} Baths",
+                    "Dropped by: Spatial Community",
                     style: TextStyle(fontSize: 18, color: Colors.grey[700]),
                   ),
                   SizedBox(height: 24),
@@ -170,7 +170,7 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
                       padding: EdgeInsets.symmetric(vertical: 16),
                       backgroundColor: Colors.blue,
                     ),
-                    child: Text('Text the Agent', style: TextStyle(fontSize: 18, color: Colors.white)),
+                    child: Text('Reply to Post', style: TextStyle(fontSize: 18, color: Colors.white)),
                   ),
                 ],
               ),
