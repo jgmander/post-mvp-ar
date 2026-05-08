@@ -6,7 +6,7 @@ class PostCreate(BaseModel):
     latitude: float
     longitude: float
     altitude: float
-    message_content: str
+    caption: str
     creator_id: str
     visibility_type: Literal["1-to-1", "1-to-many"]
     reach: int = Field(default=0, description="The intended reach distance or amount")

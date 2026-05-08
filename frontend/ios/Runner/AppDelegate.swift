@@ -72,7 +72,8 @@ import ARCoreGeospatial
 
                 do {
                     // 1. Temporary Earth Anchor
-                    let altitude = garSession.currentFrame?.earth?.cameraGeospatialTransform?.altitude ?? 0.0
+                    let garFrame = try? garSession.update(with: arFrame)
+                    let altitude = garFrame?.earth?.cameraGeospatialTransform?.altitude ?? 0.0
                     let tempAnchor = try garSession.createAnchor(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng), altitude: altitude, eastUpSouthQTarget: simd_quatf(angle: 0, axis: simd_float3(0,1,0)))
                     
                     let cameraTransform = arFrame.camera.transform
@@ -88,7 +89,7 @@ import ARCoreGeospatial
                     let origin = simd_float3(cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
                     
                     // 3. Raycast against Streetscape Geometry
-                    let hitResults = garSession.currentFrame?.raycast(origin, direction: direction) ?? []
+                    let hitResults = garFrame?.raycast(origin, direction: direction) ?? []
                     var hitBuilding = false
                     var hitTransform: simd_float4x4?
                     
