@@ -192,61 +192,46 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  // ─── Price-Tag Pill Marker ─────────────────────────────────────────
-  Future<BitmapDescriptor> _buildPriceTagMarker(String label) async {
-    const double w = 160.0;
-    const double h = 60.0;
-    const double r = 30.0;
-    const double tipH = 12.0;
-
+  // ─── Social Pin & Cluster Markers ──────────────────────────────
+  Future<BitmapDescriptor> _buildSocialMarker() async {
+    const double size = 40.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    // Pill path with downward triangle tip
-    final pillPath = Path()
-      ..addRRect(RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, w, h), const Radius.circular(r)))
-      ..moveTo(w / 2 - 12, h)
-      ..lineTo(w / 2, h + tipH)
-      ..lineTo(w / 2 + 12, h)
-      ..close();
-
-    // Heavy blurred drop shadow for lift
-    canvas.drawShadow(pillPath, Colors.black, 12.0, false);
-
-    // High-contrast stark white pill background
-    final bg = Paint()..color = Colors.white;
-    canvas.drawPath(pillPath, bg);
-
-    // Zillow-tier Typography: Massive, dark, heavy weight
+    canvas.drawShadow(Path()..addOval(Rect.fromLTWH(0,0,size,size)), Colors.black, 8.0, false);
+    canvas.drawCircle(const Offset(size/2, size/2), size/2, Paint()..color = _PostColors.brand);
+    
+    // Icon or Initial
     final tp = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: const TextStyle(
-          color: Color(0xFF0D1220), // Dark charcoal/brand black
-          fontSize: 24,
-          fontWeight: FontWeight.w800,
-          letterSpacing: -0.5,
-        ),
-      ),
+      text: const TextSpan(text: 'P', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
       textDirection: TextDirection.ltr,
     );
     tp.layout();
-    
-    // Perfectly centered within the pill body (ignoring the tip)
-    tp.paint(canvas, Offset((w - tp.width) / 2, (h - tp.height) / 2));
+    tp.paint(canvas, Offset((size - tp.width) / 2, (size - tp.height) / 2));
 
-    final img = await recorder.endRecording()
-        .toImage(w.toInt(), (h + tipH).toInt());
+    final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
-  String _formatPrice(String raw) {
-    final num = double.tryParse(raw.replaceAll(RegExp(r'[^0-9.]'), ''));
-    if (num == null || num == 0) return raw.isNotEmpty ? raw : 'Listing';
-    if (num >= 1000000) return '\$${(num / 1000000).toStringAsFixed(1)}M';
-    if (num >= 1000) return '\$${(num / 1000).round()}K';
-    return '\$${num.round()}';
+  Future<BitmapDescriptor> _buildClusterMarker(int count) async {
+    const double size = 48.0;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    canvas.drawShadow(Path()..addOval(Rect.fromLTWH(0,0,size,size)), Colors.black, 12.0, false);
+    canvas.drawCircle(const Offset(size/2, size/2), size/2, Paint()..color = _PostColors.accent);
+    
+    final tp = TextPainter(
+      text: TextSpan(text: '$count', style: const TextStyle(color: Color(0xFF0D1220), fontSize: 20, fontWeight: FontWeight.w800)),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, Offset((size - tp.width) / 2, (size - tp.height) / 2));
+
+    final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
+    final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
   void _animateToPosition(Position pos) {
@@ -289,8 +274,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         final centerPost = cluster.first;
         final centerLatLng = LatLng(centerPost.latitude, centerPost.longitude);
 
-        // Price-tag marker
-        final markerIcon = await _buildPriceTagMarker(_formatPrice(centerPost.messageContent));
+        BitmapDescriptor markerIcon;
+        if (cluster.length > 1) {
+          markerIcon = await _buildClusterMarker(cluster.length);
+        } else {
+          markerIcon = await _buildSocialMarker();
+        }
         newMarkers.add(
           Marker(
             markerId: MarkerId(centerPost.id ?? "cluster_${centerPost.latitude}_${centerPost.longitude}"),
@@ -392,7 +381,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               children: [
                 Icon(Icons.circle, color: Colors.white, size: 6),
                 SizedBox(width: 5),
-                Text('ACTIVE LISTING', style: TextStyle(
+                Text('ACTIVE MEMORY', style: TextStyle(
                   color: Colors.white, fontSize: 10,
                   fontWeight: FontWeight.w700, letterSpacing: 1.0)),
               ],
@@ -522,28 +511,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Price
+                            // Caption
                             Text(
-                              _formatPrice(p.messageContent),
+                              p.messageContent,
                               style: const TextStyle(
                                 color: _PostColors.textPrimary,
-                                fontSize: 30,
-                                fontWeight: FontWeight.w800,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
                                 letterSpacing: -0.5,
-                                height: 1.0,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            // Beds / Baths / Sqft
-                            IntrinsicHeight(
-                              child: Row(
-                                children: [
-                                  _statChip('3', 'bds'),
-                                  _vDivider(),
-                                  _statChip('2', 'ba'),
-                                  _vDivider(),
-                                  _statChip('1,425', 'sqft'),
-                                ],
+                                height: 1.2,
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -569,7 +545,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 ),
                                 const SizedBox(width: 6),
                                 const Text(
-                                  'Listing by: Post Spatial Brokerage',
+                                  'Dropped by: Spatial Community',
                                   style: TextStyle(
                                     color: _PostColors.brand, fontSize: 11,
                                     fontWeight: FontWeight.w500, letterSpacing: 0.2),
@@ -613,7 +589,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                     children: [
                                       Icon(Icons.view_in_ar_rounded, color: Colors.white, size: 24),
                                       SizedBox(width: 12),
-                                      Text('View Property in AR',
+                                      Text('View Memory in AR',
                                         style: TextStyle(
                                           color: Colors.white, fontSize: 17,
                                           fontWeight: FontWeight.w700, letterSpacing: 0.3)),
@@ -638,31 +614,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Future<void> _handleMapTap(LatLng coord) async {
     try {
+      String address = '${coord.latitude.toStringAsFixed(5)}, ${coord.longitude.toStringAsFixed(5)}';
       List<Placemark> placemarks = await placemarkFromCoordinates(coord.latitude, coord.longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
-        bool hasStructure = (place.subThoroughfare != null && place.subThoroughfare!.isNotEmpty);
-        if (hasStructure) {
-          _showCreationBottomSheet(coord, place);
-        } else {
-          HapticFeedback.vibrate();
+        String foundAddress = [
+          if (place.subThoroughfare?.isNotEmpty == true) place.subThoroughfare,
+          if (place.thoroughfare?.isNotEmpty == true) place.thoroughfare,
+          if (place.locality?.isNotEmpty == true) place.locality,
+        ].whereType<String>().join(', ');
+        if (foundAddress.isNotEmpty) {
+          address = foundAddress;
         }
-      } else {
-        HapticFeedback.vibrate();
       }
+      HapticFeedback.vibrate();
+      _showCreationBottomSheet(coord, address);
     } catch (e) {
       print("Geocoding failed: $e");
       HapticFeedback.vibrate();
+      _showCreationBottomSheet(coord, '${coord.latitude.toStringAsFixed(5)}, ${coord.longitude.toStringAsFixed(5)}');
     }
   }
 
-  void _showCreationBottomSheet(LatLng coord, Placemark place) {
-    String address = [
-      if (place.subThoroughfare?.isNotEmpty == true) place.subThoroughfare,
-      if (place.thoroughfare?.isNotEmpty == true) place.thoroughfare,
-      if (place.locality?.isNotEmpty == true) place.locality,
-    ].whereType<String>().join(', ');
-    if (address.isEmpty) address = 'Unknown Address';
+  void _showCreationBottomSheet(LatLng coord, String address) {
 
     bool isSaving = false;
     bool isSaved = false;
@@ -781,9 +755,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             const Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Create Listing',
+                                Text('Drop Memory',
                                   style: TextStyle(color: Color(0xFF0D1220), fontSize: 18, fontWeight: FontWeight.w700)),
-                                Text('Property confirmed',
+                                Text('Location acquired',
                                   style: TextStyle(color: Color(0xFF6B7A99), fontSize: 12)),
                               ],
                             ),
@@ -815,7 +789,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     maxLines: 3,
                     style: const TextStyle(color: Color(0xFF0D1220), fontSize: 15),
                     decoration: InputDecoration(
-                      hintText: 'Price, description, listing details...',
+                      hintText: 'Caption your memory...',
                       hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14),
                       filled: true,
                       fillColor: const Color(0xFFF4F6FB),
@@ -879,7 +853,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           child: isSaving
                             ? const SizedBox(width: 22, height: 22,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('Save Listing',
+                            : const Text('Drop Memory',
                                 style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
                         ),
                       ),
@@ -1023,6 +997,51 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 child: const Icon(
                   Icons.my_location,
                   color: Color(0xFF0D1220), // Dark charcoal
+                  size: 26,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 170,
+            right: 16,
+            child: GestureDetector(
+              onTap: () async {
+                HapticFeedback.lightImpact();
+                if (_mapController != null) {
+                  LatLngBounds bounds = await _mapController!.getVisibleRegion();
+                  LatLng center = LatLng(
+                    (bounds.northeast.latitude + bounds.southwest.latitude) / 2,
+                    (bounds.northeast.longitude + bounds.southwest.longitude) / 2
+                  );
+                  _mapController!.animateCamera(
+                    CameraUpdate.newCameraPosition(
+                      CameraPosition(
+                        target: center,
+                        zoom: 19.5,
+                        tilt: 45.0,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: _PostColors.brand,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _PostColors.brand.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.3d_rotation,
+                  color: Colors.white,
                   size: 26,
                 ),
               ),
