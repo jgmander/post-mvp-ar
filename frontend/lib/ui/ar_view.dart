@@ -450,10 +450,75 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                               });
 
                               Navigator.pop(sheetContext);
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('📌 Pinned! CTA: ${created.ctaText ?? 'None'}'),
-                                backgroundColor: Colors.cyanAccent.withOpacity(0.8),
-                              ));
+                              
+                              // Show beautiful success dialog
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (BuildContext context) {
+                                  return Center(
+                                    child: TweenAnimationBuilder<double>(
+                                      tween: Tween<double>(begin: 0.0, end: 1.0),
+                                      duration: const Duration(milliseconds: 600),
+                                      curve: Curves.elasticOut,
+                                      builder: (context, value, child) {
+                                        return Transform.scale(
+                                          scale: value,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black.withOpacity(0.85),
+                                              borderRadius: BorderRadius.circular(24),
+                                              border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 2),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.cyanAccent.withOpacity(0.3),
+                                                  blurRadius: 20,
+                                                  spreadRadius: 5,
+                                                )
+                                              ]
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.check_circle_outline, color: Colors.cyanAccent, size: 64),
+                                                const SizedBox(height: 16),
+                                                const Text(
+                                                  'POST DROPPED',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 22,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 2,
+                                                    decoration: TextDecoration.none,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  'Live in AR for everyone.',
+                                                  style: TextStyle(
+                                                    color: Colors.white.withOpacity(0.7),
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w400,
+                                                    decoration: TextDecoration.none,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              );
+                              
+                              // Auto dismiss after 2 seconds
+                              Future.delayed(const Duration(seconds: 2), () {
+                                if (mounted && Navigator.canPop(context)) {
+                                  Navigator.pop(context);
+                                }
+                              });
                             } catch (e) {
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                               setModalState(() => isSubmitting = false);
@@ -1003,19 +1068,4 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   ),
   );
   }
-}
-// AnimatedBuilder is a simple alias for AnimatedWidget builder pattern
-class AnimatedBuilder extends AnimatedWidget {
-  final Widget Function(BuildContext context, Widget? child) builder;
-  final Widget? child;
-
-  const AnimatedBuilder({
-    Key? key,
-    required Animation<double> animation,
-    required this.builder,
-    this.child,
-  }) : super(key: key, listenable: animation);
-
-  @override
-  Widget build(BuildContext context) => builder(context, child);
 }
