@@ -615,22 +615,31 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Future<void> _handleMapTap(LatLng coord) async {
     try {
       String address = '${coord.latitude.toStringAsFixed(5)}, ${coord.longitude.toStringAsFixed(5)}';
-      List<Placemark> placemarks = await placemarkFromCoordinates(coord.latitude, coord.longitude);
-      if (placemarks.isNotEmpty) {
-        Placemark place = placemarks.first;
-        String foundAddress = [
-          if (place.subThoroughfare?.isNotEmpty == true) place.subThoroughfare,
-          if (place.thoroughfare?.isNotEmpty == true) place.thoroughfare,
-          if (place.locality?.isNotEmpty == true) place.locality,
-        ].whereType<String>().join(', ');
-        if (foundAddress.isNotEmpty) {
-          address = foundAddress;
+      
+      // Attempt semantic places resolution
+      final placeDetails = await _apiService.getPlaceFromCoordinates(coord.latitude, coord.longitude);
+      if (placeDetails != null && placeDetails['name'] != null && placeDetails['name']!.isNotEmpty) {
+        address = placeDetails['name']!;
+      } else {
+        // Fallback to basic placemark if Places API fails
+        List<Placemark> placemarks = await placemarkFromCoordinates(coord.latitude, coord.longitude);
+        if (placemarks.isNotEmpty) {
+          Placemark place = placemarks.first;
+          String foundAddress = [
+            if (place.subThoroughfare?.isNotEmpty == true) place.subThoroughfare,
+            if (place.thoroughfare?.isNotEmpty == true) place.thoroughfare,
+            if (place.locality?.isNotEmpty == true) place.locality,
+          ].whereType<String>().join(', ');
+          if (foundAddress.isNotEmpty) {
+            address = foundAddress;
+          }
         }
       }
+      
       HapticFeedback.vibrate();
       _showCreationBottomSheet(coord, address);
     } catch (e) {
-      print("Geocoding failed: $e");
+      print("Geocoding/Places failed: $e");
       HapticFeedback.vibrate();
       _showCreationBottomSheet(coord, '${coord.latitude.toStringAsFixed(5)}, ${coord.longitude.toStringAsFixed(5)}');
     }

@@ -3,11 +3,13 @@ import UIKit
 import GoogleMaps
 import ARKit
 import SceneKit
+import ARCoreGeospatial
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, ARSCNViewDelegate, ARSessionDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, ARSCNViewDelegate, ARSessionDelegate, GARSessionDelegate {
   private var arView: ARSCNView?
   private var methodChannel: FlutterMethodChannel?
+  private var garSession: GARSession?
 
   override func application(
     _ application: UIApplication,
@@ -25,13 +27,22 @@ import SceneKit
     self.methodChannel = FlutterMethodChannel(name: "com.postspatial.ar/geospatial",
                                               binaryMessenger: controller.binaryMessenger)
     
-    // Scaffold ARSCNView overlay
     self.arView = ARSCNView(frame: controller.view.bounds)
     if let arView = self.arView {
         arView.delegate = self
         arView.session.delegate = self
-        // Note: For a true POC, this view would be inserted underneath the transparent Flutter view.
-        // controller.view.insertSubview(arView, at: 0)
+    }
+
+    do {
+        self.garSession = try GARSession(apiKey: "AIzaSyDos1-Qi6u61x4im7B161B4Bmh2Tf5dU_8", bundleIdentifier: nil)
+        var error: NSError?
+        let config = GARSessionConfiguration()
+        config.geospatialMode = .enabled
+        config.streetscapeGeometryMode = .enabled
+        self.garSession?.setConfiguration(config, error: &error)
+        self.garSession?.delegate = self
+    } catch {
+        print("Failed to initialize GARSession")
     }
 
     self.methodChannel?.setMethodCallHandler({
@@ -48,23 +59,66 @@ import SceneKit
         
         self.methodChannel?.invokeMethod("onTrackingStateChanged", arguments: "LOCALIZING")
 
-        // Start ARGeoTracking if supported
         if #available(iOS 14.0, *) {
-            if ARGeoTrackingConfiguration.isSupported {
-                let config = ARGeoTrackingConfiguration()
+            if ARWorldTrackingConfiguration.isSupported {
+                let config = ARWorldTrackingConfiguration()
+                config.worldAlignment = .gravity
                 self.arView?.session.run(config)
                 
-                // Create ARGeoAnchor
-                let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lng)
-                let geoAnchor = ARGeoAnchor(coordinate: coordinate)
-                self.arView?.session.add(anchor: geoAnchor)
-                print("DEBUG: [Post] Added ARGeoAnchor at \(lat), \(lng)")
-                result(true)
+                guard let garSession = self.garSession, let arFrame = self.arView?.session.currentFrame else {
+                    result(FlutterError(code: "UNAVAILABLE", message: "AR Session not ready", details: nil))
+                    return
+                }
+
+                do {
+                    // 1. Temporary Earth Anchor
+                    let altitude = garSession.currentFrame?.earth?.cameraGeospatialTransform?.altitude ?? 0.0
+                    let tempAnchor = try garSession.createAnchor(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng), altitude: altitude, eastUpSouthQTarget: simd_quatf(angle: 0, axis: simd_float3(0,1,0)))
+                    
+                    let cameraTransform = arFrame.camera.transform
+                    let anchorTransform = tempAnchor.transform
+                    
+                    // 2. Vector towards temporary anchor
+                    let dx = anchorTransform.columns.3.x - cameraTransform.columns.3.x
+                    let dy = anchorTransform.columns.3.y - cameraTransform.columns.3.y
+                    let dz = anchorTransform.columns.3.z - cameraTransform.columns.3.z
+                    
+                    let distance = sqrt(dx*dx + dy*dy + dz*dz)
+                    let direction = simd_float3(dx/distance, dy/distance, dz/distance)
+                    let origin = simd_float3(cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
+                    
+                    // 3. Raycast against Streetscape Geometry
+                    let hitResults = garSession.currentFrame?.raycast(origin, direction: direction) ?? []
+                    var hitBuilding = false
+                    var hitTransform: simd_float4x4?
+                    
+                    for hit in hitResults {
+                        if let trackable = hit.trackable as? GARStreetscapeGeometry, trackable.type == .building {
+                            hitBuilding = true
+                            hitTransform = hit.transform
+                            break
+                        }
+                    }
+                    
+                    // 4. Snap to mesh
+                    if hitBuilding, let hitTransform = hitTransform {
+                        _ = try garSession.createAnchor(transform: hitTransform)
+                        print("DEBUG: [Post] Snapped to BUILDING mesh")
+                        garSession.remove(tempAnchor)
+                        result(true)
+                    } else {
+                        print("DEBUG: [Post] Earth anchor created at \(lat), \(lng) (No building hit)")
+                        result(true)
+                    }
+                } catch {
+                    print("Error creating GAR anchor: \(error)")
+                    result(FlutterError(code: "ANCHOR_ERROR", message: "Failed to create GAR anchor", details: nil))
+                }
             } else {
-                result(FlutterError(code: "UNSUPPORTED", message: "ARGeoTrackingConfiguration is not supported on this device.", details: nil))
+                result(FlutterError(code: "UNSUPPORTED", message: "ARWorldTrackingConfiguration not supported.", details: nil))
             }
         } else {
-            result(FlutterError(code: "UNSUPPORTED", message: "iOS 14.0 or newer is required for ARGeoTracking.", details: nil))
+            result(FlutterError(code: "UNSUPPORTED", message: "iOS 14.0 or newer is required.", details: nil))
         }
       } else {
         result(FlutterMethodNotImplemented)
@@ -73,35 +127,29 @@ import SceneKit
   }
 
   // MARK: - ARSessionDelegate
-  @available(iOS 14.0, *)
-  func session(_ session: ARSession, didChange geoTrackingStatus: ARGeoTrackingStatus) {
+  func session(_ session: ARSession, didUpdate frame: ARFrame) {
+      do {
+          _ = try self.garSession?.update(frame)
+      } catch {
+          print("GARSession update error")
+      }
+  }
+
+  // MARK: - GARSessionDelegate
+  func session(_ session: GARSession, didUpdate earth: GAREarth?) {
       let stateString: String
-      switch geoTrackingStatus.state {
-      case .notAvailable:
-          stateString = "NOT_AVAILABLE"
-      case .initializing:
-          stateString = "LOCALIZING"
-      case .localizing:
-          stateString = "LOCALIZING"
-      case .localized:
+      if earth?.trackingState == .tracking {
           stateString = "TRACKING"
-      @unknown default:
-          stateString = "UNKNOWN"
+      } else {
+          stateString = "LOCALIZING"
       }
       self.methodChannel?.invokeMethod("onTrackingStateChanged", arguments: stateString)
   }
 
   // MARK: - ARSCNViewDelegate
   func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-      if #available(iOS 14.0, *) {
-          guard let geoAnchor = anchor as? ARGeoAnchor else { return nil }
-          print("DEBUG: [Post] Rendering node for ARGeoAnchor at \(geoAnchor.coordinate.latitude), \(geoAnchor.coordinate.longitude)")
-          
-          // Load the .usdz asset from the flutter bundle
-          return SCNNode()
-      } else {
-          return nil
-      }
+      // GARSession handles tracking, returning nil to skip manual binding in POC
+      return nil
   }
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {

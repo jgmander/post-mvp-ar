@@ -20,6 +20,7 @@ import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
 import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
 import com.google.ar.core.exceptions.UnavailableSdkTooOldException
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
+import com.google.ar.core.StreetscapeGeometry
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.postspatial.ar/geospatial"
@@ -30,13 +31,14 @@ class MainActivity : FlutterActivity() {
     // Live Tracking State Cache
     private var lastTrackingState: TrackingState? = null
     private var lastEarthState: com.google.ar.core.Earth.EarthState? = null
+    private var lastFrame: com.google.ar.core.Frame? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     
     // Equivalent Session Frame Listener (Live Binding)
     private val trackingStatePoller = object : Runnable {
         override fun run() {
             try {
-                arSession?.update()
+                lastFrame = arSession?.update()
             } catch (e: Exception) {
                 // Ignore update errors in this POC headless poller
             }
@@ -87,11 +89,43 @@ class MainActivity : FlutterActivity() {
                 // Scaffold Earth anchor logic
                 try {
                     val earth = arSession?.earth
-                    if (earth?.trackingState == TrackingState.TRACKING) {
-                        val altitude = 0.0
-                        val anchor = earth.createAnchor(lat!!, lng!!, altitude, 0f, 0f, 0f, 1f)
-                        Log.d("MainActivity", "Earth anchor created at \$lat, \$lng")
-                        result.success(true)
+                    val frame = lastFrame
+                    if (earth?.trackingState == TrackingState.TRACKING && frame != null) {
+                        val altitude = earth.cameraGeospatialPose.altitude
+                        val tempAnchor = earth.createAnchor(lat!!, lng!!, altitude, 0f, 0f, 0f, 1f)
+                        val tempPose = tempAnchor.pose
+                        val cameraPose = frame.camera.pose
+                        
+                        val dx = tempPose.tx() - cameraPose.tx()
+                        val dy = tempPose.ty() - cameraPose.ty()
+                        val dz = tempPose.tz() - cameraPose.tz()
+                        val distance = Math.sqrt((dx * dx + dy * dy + dz * dz).toDouble()).toFloat()
+                        
+                        val origin = floatArrayOf(cameraPose.tx(), cameraPose.ty(), cameraPose.tz())
+                        val direction = floatArrayOf(dx / distance, dy / distance, dz / distance)
+                        
+                        val hitResults = frame.hitTest(origin, 0, direction, 0)
+                        var hitBuilding = false
+                        var hitPose: com.google.ar.core.Pose? = null
+                        
+                        for (hit in hitResults) {
+                            val trackable = hit.trackable
+                            if (trackable is StreetscapeGeometry && trackable.type == StreetscapeGeometry.Type.BUILDING) {
+                                hitBuilding = true
+                                hitPose = hit.hitPose
+                                break
+                            }
+                        }
+                        
+                        if (hitBuilding && hitPose != null) {
+                            val finalAnchor = arSession?.createAnchor(hitPose)
+                            Log.d("MainActivity", "Snapped to BUILDING mesh at \${hitPose.tx()}, \${hitPose.ty()}, \${hitPose.tz()}")
+                            tempAnchor.detach()
+                            result.success(true)
+                        } else {
+                            Log.d("MainActivity", "Earth anchor created at \$lat, \$lng (No building hit)")
+                            result.success(true)
+                        }
                     } else {
                         Log.w("MainActivity", "Earth API not tracking yet. Live binding active.")
                         result.success(false) 
@@ -131,6 +165,7 @@ class MainActivity : FlutterActivity() {
                 arSession = Session(this)
                 val config = Config(arSession)
                 config.geospatialMode = Config.GeospatialMode.ENABLED
+                config.streetscapeGeometryMode = Config.StreetscapeGeometryMode.ENABLED
                 arSession?.configure(config)
             } catch (e: Exception) {
                 Log.e("MainActivity", "Failed to create AR session", e)
