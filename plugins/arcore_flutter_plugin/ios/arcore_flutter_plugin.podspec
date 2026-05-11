@@ -15,7 +15,7 @@ Flutter plugin providing ARCore Geospatial API support on iOS via GARSession.
   s.source_files = 'Classes/**/*'
   s.public_header_files = 'Classes/**/*.h'
   s.dependency 'Flutter'
-  s.dependency 'ARCore/Geospatial', '~> 1.46.0'
+  s.dependency 'ARCore/Geospatial', '~> 1.48.0'
 
   s.ios.deployment_target = '15.0'
   s.frameworks = 'ARKit', 'SceneKit', 'CoreLocation'

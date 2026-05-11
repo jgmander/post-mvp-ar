@@ -6,7 +6,7 @@ import SceneKit
 import ARCoreGeospatial
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, ARSCNViewDelegate, ARSessionDelegate, GARSessionDelegate {
+@objc class AppDelegate: FlutterAppDelegate, ARSCNViewDelegate, ARSessionDelegate, GARSessionDelegate {
   private var arView: ARSCNView?
   private var methodChannel: FlutterMethodChannel?
   private var garSession: GARSession?
@@ -15,12 +15,24 @@ import ARCoreGeospatial
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    let apiKey = "AIzaSyDos1-Qi6u61x4im7B161B4Bmh2Tf5dU_8"
+    let apiKey = Bundle.main.object(forInfoDictionaryKey: "MAPS_API_KEY") as? String ?? ""
     GMSServices.provideAPIKey(apiKey)
-    print("DEBUG: [Post] AppDelegate GMSServices.provideAPIKey initialized for iOS")
+    print("DEBUG: [Post] AppDelegate GMSServices.provideAPIKey initialized for iOS with dynamic key")
     
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    // Must call super first — this initializes the Flutter engine and sets window.rootViewController
+    let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    
+    // Register all plugins with self (FlutterAppDelegate implements FlutterPluginRegistry)
+    GeneratedPluginRegistrant.register(with: self)
+    
+    // rootViewController is now safely set after super.application returns
+    if let controller = window?.rootViewController as? FlutterViewController {
+        setupARKitChannel(controller: controller)
+    }
+    
+    return result
   }
+
 
   // MARK: - Safe MethodChannel Bridge
   func setupARKitChannel(controller: FlutterViewController) {
@@ -31,10 +43,13 @@ import ARCoreGeospatial
     if let arView = self.arView {
         arView.delegate = self
         arView.session.delegate = self
+        arView.isHidden = true
+        controller.view.addSubview(arView)
     }
 
     do {
-        self.garSession = try GARSession(apiKey: "AIzaSyDos1-Qi6u61x4im7B161B4Bmh2Tf5dU_8", bundleIdentifier: nil)
+        let apiKey = Bundle.main.object(forInfoDictionaryKey: "MAPS_API_KEY") as? String ?? ""
+        self.garSession = try GARSession(apiKey: apiKey, bundleIdentifier: nil)
         var error: NSError?
         let config = GARSessionConfiguration()
         config.geospatialMode = .enabled
@@ -72,9 +87,9 @@ import ARCoreGeospatial
 
                 do {
                     // 1. Temporary Earth Anchor
-                    let garFrame = try? garSession.update(with: arFrame)
+                    let garFrame = try? garSession.update(arFrame)
                     let altitude = garFrame?.earth?.cameraGeospatialTransform?.altitude ?? 0.0
-                    let tempAnchor = try garSession.createAnchor(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng), altitude: altitude, eastUpSouthQTarget: simd_quatf(angle: 0, axis: simd_float3(0,1,0)))
+                    let tempAnchor = try garSession.createAnchor(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng), altitude: altitude, eastUpSouthQAnchor: simd_quatf(angle: 0, axis: simd_float3(0,1,0)))
                     
                     let cameraTransform = arFrame.camera.transform
                     let anchorTransform = tempAnchor.transform
@@ -89,21 +104,24 @@ import ARCoreGeospatial
                     let origin = simd_float3(cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
                     
                     // 3. Raycast against Streetscape Geometry
-                    let hitResults = garFrame?.raycast(origin, direction: direction) ?? []
+                    let hitResults = try? garSession.raycastStreetscapeGeometry(origin: origin, direction: direction)
+                    let hits = hitResults ?? []
                     var hitBuilding = false
                     var hitTransform: simd_float4x4?
+                    var hitGeometry: GARStreetscapeGeometry?
                     
-                    for hit in hitResults {
-                        if let trackable = hit.trackable as? GARStreetscapeGeometry, trackable.type == .building {
+                    for hit in hits {
+                        if let trackable = hit.streetscapeGeometry, trackable.type == .building {
                             hitBuilding = true
-                            hitTransform = hit.transform
+                            hitTransform = hit.worldTransform
+                            hitGeometry = trackable
                             break
                         }
                     }
                     
                     // 4. Snap to mesh
-                    if hitBuilding, let hitTransform = hitTransform {
-                        _ = try garSession.createAnchor(transform: hitTransform)
+                    if hitBuilding, let hitTransform = hitTransform, let hitGeometry = hitGeometry {
+                        _ = try garSession.createAnchor(geometry: hitGeometry, transform: hitTransform)
                         print("DEBUG: [Post] Snapped to BUILDING mesh")
                         garSession.remove(tempAnchor)
                         result(true)
@@ -151,9 +169,5 @@ import ARCoreGeospatial
   func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
       // GARSession handles tracking, returning nil to skip manual binding in POC
       return nil
-  }
-
-  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
-    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 }
