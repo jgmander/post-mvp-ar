@@ -94,6 +94,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Set<Marker> _markers = {};
   bool _locationGranted = false;
 
+  StreamSubscription<QuerySnapshot>? _postsSubscription;
+
   bool _isBooting = true;
   Timer? _bootTimer;
   int _bootTextIndex = 0;
@@ -141,6 +143,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _postsSubscription?.cancel();
     _bootTimer?.cancel();
     _radarCtrl.dispose();
     _bootTextCtrl.dispose();
@@ -252,9 +255,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _fetchProperties(double lat, double lng) async {
-    try {
-      final posts = await _apiService.getNearbyPosts(lat, lng, radiusKm: 10.0);
-      Set<Marker> newMarkers = {};
+    _postsSubscription?.cancel();
+    _postsSubscription = FirebaseFirestore.instance
+        .collection('posts')
+        .where('is_flagged', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) async {
+      try {
+        final posts = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          data['id'] = doc.id;
+          return Post.fromJson(data);
+        }).toList();
+        
+        Set<Marker> newMarkers = {};
       
       List<List<Post>> clusters = [];
       for (var p in posts) {
@@ -299,14 +313,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         );
       }
 
-      if (mounted) {
-        setState(() {
-          _markers = newMarkers;
-        });
+        if (mounted) {
+          setState(() {
+            _markers = newMarkers;
+          });
+        }
+      } catch (e) {
+        print("Failed to process property snapshot: $e");
       }
-    } catch (e) {
-      print("Failed to fetch properties: $e");
-    }
+    });
   }
 
   // Hero gradient palettes for POC image variety
@@ -687,10 +702,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                   // Drag handle
                   Center(
                     child: Container(
@@ -981,6 +997,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ],
+              ),
               ),
             );
           },

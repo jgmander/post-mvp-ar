@@ -352,9 +352,10 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                 bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
                 left: 24, right: 24, top: 24,
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                   // Handle bar
                   Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
                   SizedBox(height: 16),
@@ -575,6 +576,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                       ),
                   SizedBox(height: 30),
                 ],
+              ),
               ),
             );
           },

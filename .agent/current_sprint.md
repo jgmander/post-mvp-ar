@@ -8,7 +8,7 @@
   - iOS (Build 19) and Android (versionCode 19) synced to production parity
   - TestFlight IPA compiled and Xcode Organizer opened for distribution
 ## Current Phase
-* Sprint 4.8c - AI Moderation Pipeline & Query Filtering
+* Sprint 4.9 - Live Sync, Moderation Routing & UX Insets
 ## Priorities
 * Monitor TestFlight review pipeline
 * UX audit of Ghost-Pin AR interaction
