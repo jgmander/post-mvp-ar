@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Post {
   final String? id;
   final double latitude;
@@ -38,6 +40,15 @@ class Post {
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
+    DateTime? parsedExpiresAt;
+    if (json['expires_at'] != null) {
+      if (json['expires_at'] is Timestamp) {
+        parsedExpiresAt = (json['expires_at'] as Timestamp).toDate();
+      } else if (json['expires_at'] is String) {
+        parsedExpiresAt = DateTime.parse(json['expires_at']);
+      }
+    }
+
     return Post(
       id: json['id'],
       latitude: json['latitude'],
@@ -55,7 +66,7 @@ class Post {
       isFlagged: json['is_flagged'] ?? false,
       placeName: json['place_name'],
       placeCategory: json['place_category'],
-      expiresAt: json['expires_at'] != null ? DateTime.parse(json['expires_at']) : null,
+      expiresAt: parsedExpiresAt,
     );
   }
 
