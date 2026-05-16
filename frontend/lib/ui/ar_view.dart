@@ -465,101 +465,113 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                               final created = await _apiService.createPost(newPost);
                               AuthService().hasDroppedFreePost = true; // Mark free post dropped
 
-                              // Solidify the ghost pin into a real AR sphere
-                              final material = ArCoreMaterial(color: Colors.cyanAccent.withOpacity(0.9));
-                              final sphere = ArCoreSphere(materials: [material], radius: 0.2);
-                              final node = ArCoreNode(
-                                name: created.id ?? "pin_${DateTime.now().millisecondsSinceEpoch}",
-                                shape: sphere,
-                              );
+                              if (created.isFlagged == false) {
+                                // Solidify the ghost pin into a real AR sphere
+                                final material = ArCoreMaterial(color: Colors.cyanAccent.withOpacity(0.9));
+                                final sphere = ArCoreSphere(materials: [material], radius: 0.2);
+                                final node = ArCoreNode(
+                                  name: created.id ?? "pin_${DateTime.now().millisecondsSinceEpoch}",
+                                  shape: sphere,
+                                );
 
-                              await arCoreController.resolveAnchorOnRooftopAsync(node, lat, lng, 0.5);
+                                await arCoreController.resolveAnchorOnRooftopAsync(node, lat, lng, 0.5);
 
-                              // THE THUD
-                              HapticFeedback.heavyImpact();
-                              await Future.delayed(Duration(milliseconds: 100));
-                              HapticFeedback.heavyImpact();
+                                // THE THUD
+                                HapticFeedback.heavyImpact();
+                                await Future.delayed(Duration(milliseconds: 100));
+                                HapticFeedback.heavyImpact();
 
-                              setState(() {
-                                nearbyPosts.add(created);
-                                _renderedPostIds.add(node.name!);
-                              });
+                                setState(() {
+                                  nearbyPosts.add(created);
+                                  _renderedPostIds.add(node.name!);
+                                });
 
-                              Navigator.pop(sheetContext);
-                              
-                              // Show beautiful success dialog
-                              showDialog(
-                                context: context,
-                                barrierDismissible: false,
-                                builder: (BuildContext context) {
-                                  return Center(
-                                    child: TweenAnimationBuilder<double>(
-                                      tween: Tween<double>(begin: 0.0, end: 1.0),
-                                      duration: const Duration(milliseconds: 600),
-                                      curve: Curves.elasticOut,
-                                      builder: (context, value, child) {
-                                        return Transform.scale(
-                                          scale: value,
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-                                            decoration: BoxDecoration(
-                                              color: Colors.black.withOpacity(0.85),
-                                              borderRadius: BorderRadius.circular(24),
-                                              border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 2),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.cyanAccent.withOpacity(0.3),
-                                                  blurRadius: 20,
-                                                  spreadRadius: 5,
-                                                )
-                                              ]
-                                            ),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                const Icon(Icons.check_circle_outline, color: Colors.cyanAccent, size: 64),
-                                                const SizedBox(height: 16),
-                                                const Text(
-                                                  'POST DROPPED',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 22,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 2,
-                                                    decoration: TextDecoration.none,
+                                Navigator.pop(sheetContext);
+                                
+                                // Show beautiful success dialog
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (BuildContext context) {
+                                    return Center(
+                                      child: TweenAnimationBuilder<double>(
+                                        tween: Tween<double>(begin: 0.0, end: 1.0),
+                                        duration: const Duration(milliseconds: 600),
+                                        curve: Curves.elasticOut,
+                                        builder: (context, value, child) {
+                                          return Transform.scale(
+                                            scale: value,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.85),
+                                                borderRadius: BorderRadius.circular(24),
+                                                border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 2),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: Colors.cyanAccent.withOpacity(0.3),
+                                                    blurRadius: 20,
+                                                    spreadRadius: 5,
+                                                  )
+                                                ]
+                                              ),
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(Icons.check_circle_outline, color: Colors.cyanAccent, size: 64),
+                                                  const SizedBox(height: 16),
+                                                  const Text(
+                                                    'POST DROPPED',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 22,
+                                                      fontWeight: FontWeight.w800,
+                                                      letterSpacing: 2,
+                                                      decoration: TextDecoration.none,
+                                                    ),
                                                   ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  'Live in AR for everyone.',
-                                                  style: TextStyle(
-                                                    color: Colors.white.withOpacity(0.7),
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.w400,
-                                                    decoration: TextDecoration.none,
+                                                  const SizedBox(height: 8),
+                                                  Text(
+                                                    'Live in AR for everyone.',
+                                                    style: TextStyle(
+                                                      color: Colors.white.withOpacity(0.7),
+                                                      fontSize: 14,
+                                                      fontWeight: FontWeight.w400,
+                                                      decoration: TextDecoration.none,
+                                                    ),
                                                   ),
-                                                ),
-                                              ],
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  );
-                                },
-                              );
-                              
-                              // Auto dismiss after 2 seconds
-                              Future.delayed(const Duration(seconds: 2), () {
-                                if (mounted && Navigator.canPop(context)) {
-                                  Navigator.pop(context);
-                                  
-                                  final user = AuthService().currentUser;
-                                  if (user != null && user.isAnonymous) {
-                                    _showSaveItToast();
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  },
+                                );
+                                
+                                // Auto dismiss after 2 seconds
+                                Future.delayed(const Duration(seconds: 2), () {
+                                  if (mounted && Navigator.canPop(context)) {
+                                    Navigator.pop(context);
+                                    
+                                    final user = AuthService().currentUser;
+                                    if (user != null && user.isAnonymous) {
+                                      _showSaveItToast();
+                                    }
                                   }
-                                }
-                              });
+                                });
+                              } else {
+                                Navigator.pop(sheetContext);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Post submitted for moderation review.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    backgroundColor: Colors.orange.shade800,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                );
+                              }
                             } catch (e) {
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
                               setModalState(() => isSubmitting = false);

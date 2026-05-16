@@ -915,7 +915,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           createdPost = await _apiService.createPost(newPost);
                           AuthService().hasDroppedFreePost = true; // Mark free post dropped
                           setModalState(() { isSaved = true; isSaving = false; });
-                          _fetchProperties(coord.latitude, coord.longitude);
+                          // Stream dynamically updates, no manual fetch needed
                           
                           // Wait for sheet dismissal before showing the Toast
                           Future.delayed(const Duration(milliseconds: 1500), () {
