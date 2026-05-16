@@ -5,6 +5,7 @@ class Post {
   final double altitude;
   final String messageContent;
   final String creatorId;
+  final String? ownerId;
   final String visibilityType;
   final int reach;
   final int uniqueViews;
@@ -22,6 +23,7 @@ class Post {
     required this.altitude,
     required this.messageContent,
     required this.creatorId,
+    this.ownerId,
     required this.visibilityType,
     this.reach = 0,
     this.uniqueViews = 0,
@@ -41,6 +43,7 @@ class Post {
       altitude: json['altitude'],
       messageContent: json['caption'] ?? json['message_content'],
       creatorId: json['creator_id'],
+      ownerId: json['owner_id'],
       visibilityType: json['visibility_type'],
       reach: json['reach'] ?? 0,
       uniqueViews: json['unique_views'] ?? 0,
@@ -60,6 +63,7 @@ class Post {
       'altitude': altitude,
       'caption': messageContent,
       'creator_id': creatorId,
+      'owner_id': ownerId,
       'visibility_type': visibilityType,
       'reach': reach,
       'place_name': placeName,

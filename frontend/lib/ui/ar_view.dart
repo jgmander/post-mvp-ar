@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
 import 'ar_onboarding_overlay.dart';
+import '../services/auth_service.dart';
 
 class ArView extends StatefulWidget {
   const ArView({Key? key}) : super(key: key);
@@ -439,7 +440,8 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                               final newPost = Post(
                                 latitude: lat, longitude: lng, altitude: alt,
                                 messageContent: contentController.text,
-                                creatorId: 'user_123',
+                                creatorId: AuthService().currentUser?.uid ?? 'anonymous',
+                                ownerId: AuthService().currentUser?.uid,
                                 visibilityType: '1-to-many',
                                 reach: 50,
                                 placeName: placeName,

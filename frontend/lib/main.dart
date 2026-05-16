@@ -3,9 +3,14 @@ import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 import 'screens/map_screen.dart';
 import 'config/env_config.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  await AuthService().signInAnonymously();
+
   // Fail Loudly configuration check
   EnvConfig.validate();
 

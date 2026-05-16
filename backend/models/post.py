@@ -7,6 +7,7 @@ class PostCreate(BaseModel):
     altitude: float
     caption: str
     creator_id: str
+    owner_id: Optional[str] = None
     visibility_type: Literal["1-to-1", "1-to-many"]
     reach: int = Field(default=0, description="The intended reach distance or amount")
     place_name: Optional[str] = None

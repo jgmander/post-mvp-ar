@@ -9,6 +9,7 @@ import 'dart:ui' as ui;
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../models/post.dart';
 import '../ui/ar_view.dart';
 
@@ -832,7 +833,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             latitude: coord.latitude,
                             longitude: coord.longitude,
                             messageContent: messageController.text,
-                            creatorId: 'user_123',
+                            creatorId: AuthService().currentUser?.uid ?? 'anonymous',
+                            ownerId: AuthService().currentUser?.uid,
                             reach: 50,
                             visibilityType: '1-to-many',
                             isSafe: true,
@@ -919,6 +921,77 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _showLoginBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: _PostColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: 24,
+            right: 24,
+            top: 14,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: _PostColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 24),
+              const Icon(Icons.lock_person_rounded, color: _PostColors.brand, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Claim Your Identity',
+                style: TextStyle(color: _PostColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Log in to manage your posts and keep them alive past 24 hours.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _PostColors.textSecondary, fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 32),
+              TextField(
+                style: const TextStyle(color: _PostColors.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Email address',
+                  hintStyle: const TextStyle(color: _PostColors.textSecondary),
+                  filled: true,
+                  fillColor: _PostColors.surfaceAlt,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auth providers coming soon!')));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _PostColors.brand,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Building-safe dark map style.
   // CRITICAL: The old style used {"elementType":"geometry"} globally, which
   // flattened all 3D building meshes to #212121 — identical to road surface.
@@ -994,6 +1067,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               child: const Icon(
                 Icons.my_location,
                 color: Color(0xFF0D1220), // Dark charcoal
+                size: 26,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 240,
+            right: 16,
+            child: FloatingActionButton(
+              heroTag: 'profileBtn',
+              backgroundColor: _PostColors.surfaceAlt,
+              onPressed: () {
+                HapticFeedback.selectionClick();
+                final user = AuthService().currentUser;
+                if (user == null || user.isAnonymous) {
+                  _showLoginBottomSheet(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile view coming soon!')));
+                }
+              },
+              child: const Icon(
+                Icons.person_rounded,
+                color: _PostColors.textPrimary,
                 size: 26,
               ),
             ),
