@@ -13,6 +13,7 @@ class Post {
   final bool isSafe;
   final String? placeName;
   final String? placeCategory;
+  final DateTime? expiresAt;
 
   Post({
     this.id,
@@ -29,6 +30,7 @@ class Post {
     this.isSafe = true,
     this.placeName,
     this.placeCategory,
+    this.expiresAt,
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,7 @@ class Post {
       isSafe: json['is_safe'] ?? true,
       placeName: json['place_name'],
       placeCategory: json['place_category'],
+      expiresAt: json['expires_at'] != null ? DateTime.parse(json['expires_at']) : null,
     );
   }
 
@@ -61,6 +64,7 @@ class Post {
       'reach': reach,
       'place_name': placeName,
       'place_category': placeCategory,
+      'expires_at': expiresAt?.toIso8601String(),
     };
   }
 }

@@ -775,32 +775,35 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         ),
                   const SizedBox(height: 20),
                   // Address chip
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4F6FB),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFDDE3EE)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.place_rounded, color: Color(0xFF4F8EF7), size: 16),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(address,
-                          style: const TextStyle(color: Color(0xFF4A5568), fontSize: 13))),
-                      ],
-                    ),
-                  ),
+                  if (address.isNotEmpty && address != 'Unknown Location')
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF4F6FB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFDDE3EE)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.place_rounded, color: Color(0xFF4F8EF7), size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(address,
+                            style: const TextStyle(color: Color(0xFF4A5568), fontSize: 13))),
+                        ],
+                      ),
+                    )
+                  else
+                    const SizedBox.shrink(),
                   const SizedBox(height: 14),
                   // Message / Listing details field
                   TextField(
                     controller: messageController,
                     enabled: !isSaved && !isSaving,
                     maxLines: 3,
-                    style: const TextStyle(color: Color(0xFF0D1220), fontSize: 15),
+                    style: const TextStyle(color: Color(0xFF0D1220), fontSize: 16, fontWeight: FontWeight.w800),
                     decoration: InputDecoration(
                       hintText: 'Caption your post...',
-                      hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14),
+                      hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14, fontWeight: FontWeight.w700),
                       filled: true,
                       fillColor: const Color(0xFFF4F6FB),
                       border: OutlineInputBorder(

@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-from datetime import datetime
-
+from datetime import datetime, timedelta
 class PostCreate(BaseModel):
     latitude: float
     longitude: float
@@ -12,6 +11,7 @@ class PostCreate(BaseModel):
     reach: int = Field(default=0, description="The intended reach distance or amount")
     place_name: Optional[str] = None
     place_category: Optional[str] = None
+    expires_at: Optional[datetime] = Field(default_factory=lambda: datetime.utcnow() + timedelta(hours=24))
 
 class PostResponse(PostCreate):
     id: str
@@ -20,3 +20,4 @@ class PostResponse(PostCreate):
     cta_text: Optional[str] = None
     cta_action: Optional[str] = None
     is_safe: bool = True
+    expires_at: Optional[datetime] = None

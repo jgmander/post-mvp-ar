@@ -349,48 +349,67 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                   SizedBox(height: 16),
 
                   // Place name header
-                  Row(
-                    children: [
-                      Icon(Icons.location_pin, color: Colors.cyanAccent, size: 28),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(placeName,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                  if (placeName.isNotEmpty && placeName != 'Unknown Location')
+                    Row(
+                      children: [
+                        Icon(Icons.location_pin, color: Colors.cyanAccent, size: 28),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(placeName,
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                            maxLines: 2, overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    )
+                  else
+                    const SizedBox.shrink(),
                   SizedBox(height: 8),
                   Text('Surface: $placeCategory',
                     style: TextStyle(fontSize: 13, color: Colors.white38),
                   ),
                   SizedBox(height: 20),
 
-                  // Quick message buttons
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: quickMessages.map((msg) => ActionChip(
-                      label: Text(msg, style: TextStyle(color: Colors.cyanAccent, fontSize: 14, fontWeight: FontWeight.w600)),
-                      backgroundColor: Colors.cyanAccent.withOpacity(0.12),
-                      side: BorderSide(color: Colors.cyanAccent.withOpacity(0.7), width: 1.5),
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      onPressed: () {
-                        contentController.text = msg;
-                        setModalState(() {});
-                      },
+                  // Post Reason Dropdown
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Post Reason',
+                      labelStyle: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                      filled: true,
+                      fillColor: Colors.black.withOpacity(0.3),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.white24),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.cyanAccent),
+                      ),
+                    ),
+                    dropdownColor: Color(0xFF1A1A2E),
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+                    icon: Icon(Icons.keyboard_arrow_down, color: Colors.cyanAccent),
+                    items: quickMessages.map((msg) => DropdownMenuItem(
+                      value: msg,
+                      child: Text(msg),
                     )).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        contentController.text = value;
+                        setModalState(() {});
+                      }
+                    },
+                    hint: Text('Select Reason', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w600)),
                   ),
                   SizedBox(height: 16),
 
-                  // Custom message input
+                  // Custom message input / Caption
                   TextField(
                     controller: contentController,
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
                     decoration: InputDecoration(
-                      labelText: 'Your Message',
-                      labelStyle: TextStyle(color: Colors.white54),
+                      labelText: 'Caption',
+                      labelStyle: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: Colors.white24),
