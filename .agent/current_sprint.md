@@ -8,7 +8,7 @@
   - iOS (Build 19) and Android (versionCode 19) synced to production parity
   - TestFlight IPA compiled and Xcode Organizer opened for distribution
 ## Current Phase
-* Sprint 4.9f - Timestamp Parsing Fix
+* Sprint 4.9g - Rules Audit & Granular Sync
 ## Priorities
 * Monitor TestFlight review pipeline
 * UX audit of Ghost-Pin AR interaction
