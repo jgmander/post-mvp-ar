@@ -291,6 +291,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   }
 
   Future<void> _dropGhostPin() async {
+    final user = AuthService().currentUser;
+    if (user != null && user.isAnonymous && AuthService().hasDroppedFreePost) {
+      HapticFeedback.heavyImpact();
+      _showLoginBottomSheet(context, isLimitReached: true);
+      return;
+    }
+
     if (_currentPose == null) return;
 
     final acc = _currentPose!['accuracy'] ?? 999.0;
@@ -449,6 +456,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                               );
 
                               final created = await _apiService.createPost(newPost);
+                              AuthService().hasDroppedFreePost = true; // Mark free post dropped
 
                               // Solidify the ghost pin into a real AR sphere
                               final material = ArCoreMaterial(color: Colors.cyanAccent.withOpacity(0.9));
@@ -538,6 +546,11 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                               Future.delayed(const Duration(seconds: 2), () {
                                 if (mounted && Navigator.canPop(context)) {
                                   Navigator.pop(context);
+                                  
+                                  final user = AuthService().currentUser;
+                                  if (user != null && user.isAnonymous) {
+                                    _showSaveItToast();
+                                  }
                                 }
                               });
                             } catch (e) {
@@ -576,6 +589,101 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       return ['Beautiful spot!', 'Event here today', 'Dog friendly'];
     }
     return ['Check this out!', 'Been here before?', 'Recommend!'];
+  }
+
+  void _showSaveItToast() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 160,
+          left: 20,
+          right: 20,
+        ),
+        dismissDirection: DismissDirection.up,
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: const Text(
+          'Your post is live! It expires in 24 hours.',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        action: SnackBarAction(
+          label: 'Save It',
+          textColor: Colors.cyanAccent,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            _showLoginBottomSheet(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showLoginBottomSheet(BuildContext context, {bool isLimitReached = false}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF161B25),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: 24, right: 24, top: 14,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFF252D3F), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 24),
+              const Icon(Icons.lock_person_rounded, color: Color(0xFF4F8EF7), size: 48),
+              const SizedBox(height: 16),
+              Text(
+                isLimitReached ? "You've reached your free limit." : 'Claim Your Identity',
+                style: const TextStyle(color: Color(0xFFF0F4FF), fontSize: 24, fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                isLimitReached ? 'Log in to drop multiple posts.' : 'Log in to manage your posts and keep them alive past 24 hours.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFF8896B0), fontSize: 14, height: 1.4),
+              ),
+              const SizedBox(height: 32),
+              TextField(
+                style: const TextStyle(color: Color(0xFFF0F4FF)),
+                decoration: InputDecoration(
+                  hintText: 'Email address',
+                  hintStyle: const TextStyle(color: Color(0xFF8896B0)),
+                  filled: true,
+                  fillColor: const Color(0xFF1E2433),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auth providers coming soon!')));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F8EF7),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // ─── Existing handlers ─────────────────────────────────────────

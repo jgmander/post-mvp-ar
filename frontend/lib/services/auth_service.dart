@@ -11,6 +11,9 @@ class AuthService {
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  // Value-Gated Progressive Profiling: Local Session State
+  bool hasDroppedFreePost = false;
+
   Future<void> signInAnonymously() async {
     if (_auth.currentUser == null) {
       try {

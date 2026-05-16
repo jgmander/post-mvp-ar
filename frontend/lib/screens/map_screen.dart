@@ -615,6 +615,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _handleMapTap(LatLng coord) async {
+    final user = AuthService().currentUser;
+    if (user != null && user.isAnonymous && AuthService().hasDroppedFreePost) {
+      HapticFeedback.heavyImpact();
+      _showLoginBottomSheet(context, isLimitReached: true);
+      return;
+    }
+
     try {
       String address = '${coord.latitude.toStringAsFixed(5)}, ${coord.longitude.toStringAsFixed(5)}';
       
@@ -842,8 +849,21 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             placeName: address,
                           );
                           createdPost = await _apiService.createPost(newPost);
+                          AuthService().hasDroppedFreePost = true; // Mark free post dropped
                           setModalState(() { isSaved = true; isSaving = false; });
                           _fetchProperties(coord.latitude, coord.longitude);
+                          
+                          // Wait for sheet dismissal before showing the Toast
+                          Future.delayed(const Duration(milliseconds: 1500), () {
+                            if (mounted && Navigator.canPop(context)) {
+                              Navigator.pop(context);
+                              
+                              final user = AuthService().currentUser;
+                              if (user != null && user.isAnonymous) {
+                                _showSaveItToast();
+                              }
+                            }
+                          });
                         } catch (e) {
                           setModalState(() => isSaving = false);
                         }
@@ -921,7 +941,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showLoginBottomSheet(BuildContext context) {
+  void _showSaveItToast() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(
+          bottom: 120, // Float above bottom action buttons
+          left: 20,
+          right: 20,
+        ),
+        dismissDirection: DismissDirection.down,
+        backgroundColor: const Color(0xFF0D1220),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF252D3F), width: 1),
+        ),
+        content: const Text(
+          'Your post is live! It expires in 24 hours.',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        ),
+        action: SnackBarAction(
+          label: 'Save It',
+          textColor: const Color(0xFF4F8EF7),
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            _showLoginBottomSheet(context);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showLoginBottomSheet(BuildContext context, {bool isLimitReached = false}) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -948,15 +999,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               const SizedBox(height: 24),
               const Icon(Icons.lock_person_rounded, color: _PostColors.brand, size: 48),
               const SizedBox(height: 16),
-              const Text(
-                'Claim Your Identity',
-                style: TextStyle(color: _PostColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800),
+              Text(
+                isLimitReached ? "You've reached your free limit." : 'Claim Your Identity',
+                style: const TextStyle(color: _PostColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Log in to manage your posts and keep them alive past 24 hours.',
+              Text(
+                isLimitReached ? 'Log in to drop multiple posts.' : 'Log in to manage your posts and keep them alive past 24 hours.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: _PostColors.textSecondary, fontSize: 14, height: 1.4),
+                style: const TextStyle(color: _PostColors.textSecondary, fontSize: 14, height: 1.4),
               ),
               const SizedBox(height: 32),
               TextField(
