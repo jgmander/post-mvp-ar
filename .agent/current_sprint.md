@@ -8,7 +8,7 @@
   - iOS (Build 19) and Android (versionCode 19) synced to production parity
   - TestFlight IPA compiled and Xcode Organizer opened for distribution
 ## Current Phase
-* Sprint 4.7 - Role Schema & Admin Dashboard Scaffold
+* Sprint 4.8b - UI Restitution & Admin Gesture Fix
 ## Priorities
 * Monitor TestFlight review pipeline
 * UX audit of Ghost-Pin AR interaction

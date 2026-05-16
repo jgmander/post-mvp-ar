@@ -663,6 +663,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     bool isSaved = false;
     Post? createdPost;
     final messageController = TextEditingController();
+    final List<String> ideas = ["Leave a note", "Hidden Gem", "Checkout this spot", "Meet me here", "Custom..."];
+    String? selectedIdea;
 
     HapticFeedback.selectionClick();
     showModalBottomSheet(
@@ -805,6 +807,86 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     )
                   else
                     const SizedBox.shrink(),
+                  // Post Reason Dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedIdea,
+                    decoration: InputDecoration(
+                      hintText: 'Select an idea...',
+                      hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14, fontWeight: FontWeight.w700),
+                      filled: true,
+                      fillColor: const Color(0xFFF4F6FB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3EE)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3EE)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF4F8EF7), width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF0D1220), fontSize: 16, fontWeight: FontWeight.w800),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4F8EF7)),
+                    items: ideas.map((msg) => DropdownMenuItem(
+                      value: msg,
+                      child: Text(msg),
+                    )).toList(),
+                    onChanged: isSaved || isSaving ? null : (value) {
+                      if (value != null) {
+                        setModalState(() {
+                          selectedIdea = value;
+                          if (value != "Custom...") {
+                            messageController.text = value;
+                          }
+                        });
+                      }
+                    },
+                  ),
+                  // Post Reason Dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedIdea,
+                    decoration: InputDecoration(
+                      hintText: 'Select an idea...',
+                      hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14, fontWeight: FontWeight.w700),
+                      filled: true,
+                      fillColor: const Color(0xFFF4F6FB),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3EE)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFDDE3EE)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF4F8EF7), width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    ),
+                    dropdownColor: Colors.white,
+                    style: const TextStyle(color: Color(0xFF0D1220), fontSize: 16, fontWeight: FontWeight.w800),
+                    icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF4F8EF7)),
+                    items: ideas.map((msg) => DropdownMenuItem(
+                      value: msg,
+                      child: Text(msg),
+                    )).toList(),
+                    onChanged: isSaved || isSaving ? null : (value) {
+                      if (value != null) {
+                        setModalState(() {
+                          selectedIdea = value;
+                          if (value != "Custom...") {
+                            messageController.text = value;
+                          }
+                        });
+                      }
+                    },
+                  ),
                   const SizedBox(height: 14),
                   // Message / Listing details field
                   TextField(
@@ -976,6 +1058,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _showLoginBottomSheet(BuildContext context, {bool isLimitReached = false}) {
+    int tapCount = 0;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1041,30 +1124,27 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 16),
-              StatefulBuilder(
-                builder: (context, setState) {
-                  int tapCount = 0;
-                  return GestureDetector(
-                    onTap: () async {
-                      tapCount++;
-                      if (tapCount >= 5) {
-                        tapCount = 0;
-                        final user = AuthService().currentUser;
-                        if (user != null) {
-                          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                          if (doc.exists && doc.data()?['role'] == 'admin') {
-                            Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
-                          }
-                        }
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  tapCount++;
+                  HapticFeedback.lightImpact();
+                  if (tapCount >= 5) {
+                    tapCount = 0;
+                    final user = AuthService().currentUser;
+                    if (user != null) {
+                      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                      if (doc.exists && doc.data()?['role'] == 'admin') {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
                       }
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Text('v1.0.0', style: TextStyle(color: _PostColors.divider, fontSize: 12)),
-                    ),
-                  );
-                }
+                    }
+                  }
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('v1.0.0', style: TextStyle(color: _PostColors.divider, fontSize: 12)),
+                ),
               ),
             ],
           ),

@@ -337,7 +337,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     bool isSubmitting = false;
 
     // Contextual quick-message presets based on the surface type
-    final List<String> quickMessages = _getQuickMessages(placeCategory);
+    final List<String> quickMessages = ["Leave a note", "Hidden Gem", "Checkout this spot", "Meet me here", "Custom..."];
 
     showModalBottomSheet(
       context: context,
@@ -406,8 +406,11 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                     )).toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        contentController.text = value;
-                        setModalState(() {});
+                        setModalState(() {
+                          if (value != "Custom...") {
+                            contentController.text = value;
+                          }
+                        });
                       }
                     },
                     hint: Text('Select Reason', style: TextStyle(color: Colors.white38, fontWeight: FontWeight.w600)),
@@ -623,6 +626,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   }
 
   void _showLoginBottomSheet(BuildContext context, {bool isLimitReached = false}) {
+    int tapCount = 0;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -683,30 +687,27 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 16),
-              StatefulBuilder(
-                builder: (context, setState) {
-                  int tapCount = 0;
-                  return GestureDetector(
-                    onTap: () async {
-                      tapCount++;
-                      if (tapCount >= 5) {
-                        tapCount = 0;
-                        final user = AuthService().currentUser;
-                        if (user != null) {
-                          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                          if (doc.exists && doc.data()?['role'] == 'admin') {
-                            Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
-                          }
-                        }
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () async {
+                  tapCount++;
+                  HapticFeedback.lightImpact();
+                  if (tapCount >= 5) {
+                    tapCount = 0;
+                    final user = AuthService().currentUser;
+                    if (user != null) {
+                      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                      if (doc.exists && doc.data()?['role'] == 'admin') {
+                        Navigator.pop(context);
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
                       }
-                    },
-                    child: const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Text('v1.0.0', style: TextStyle(color: Color(0xFF252D3F), fontSize: 12)),
-                    ),
-                  );
-                }
+                    }
+                  }
+                },
+                child: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('v1.0.0', style: TextStyle(color: Color(0xFF252D3F), fontSize: 12)),
+                ),
               ),
             ],
           ),
