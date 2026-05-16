@@ -67,10 +67,34 @@ class AdminDashboardScreen extends StatelessWidget {
                 ],
               ),
             ),
-            body: const TabBarView(
+            body: TabBarView(
               children: [
-                Center(child: Text('No users found', style: TextStyle(color: Color(0xFF8896B0)))),
-                Center(child: Text('No flagged posts', style: TextStyle(color: Color(0xFF8896B0)))),
+                const Center(child: Text('No users found', style: TextStyle(color: Color(0xFF8896B0)))),
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('posts').where('is_flagged', isEqualTo: true).snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Color(0xFF4F8EF7)));
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(child: Text('No flagged posts', style: TextStyle(color: Color(0xFF8896B0))));
+                    }
+                    final docs = snapshot.data!.docs;
+                    return ListView.builder(
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final data = docs[index].data() as Map<String, dynamic>;
+                        final caption = data['caption'] ?? 'No Caption';
+                        final flaggedId = docs[index].id;
+                        return ListTile(
+                          title: Text(caption, style: const TextStyle(color: Colors.white)),
+                          subtitle: Text('ID: $flaggedId', style: const TextStyle(color: Color(0xFF8896B0))),
+                          trailing: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                        );
+                      },
+                    );
+                  },
+                ),
               ],
             ),
           ),

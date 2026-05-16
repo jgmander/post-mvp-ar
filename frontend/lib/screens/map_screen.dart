@@ -258,6 +258,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       
       List<List<Post>> clusters = [];
       for (var p in posts) {
+        if (p.isFlagged) continue;
+        
         bool clustered = false;
         for (var cluster in clusters) {
           final center = cluster.first;

@@ -41,7 +41,7 @@ def get_nearby_posts(lat: float, lng: float, radius_km: float = 1.0) -> list:
     # out of the box without GeoHashes. For simplicity in the MVP, we will fetch recent posts.
     # In a production environment, we'd use geofire or BigQuery GIS.
     
-    docs = db.collection(COLLECTION_NAME).order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
+    docs = db.collection(COLLECTION_NAME).where("is_flagged", "==", False).order_by("created_at", direction=firestore.Query.DESCENDING).limit(100).stream()
     
     # We will let the client filter out things that are too far away for the MVP.
     results = []

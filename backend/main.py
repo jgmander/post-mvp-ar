@@ -19,20 +19,38 @@ def get_auth_config():
     # In a full app, this would be obfuscated or session-limited
     return {"maps_api_key": keys["MAPS_API_KEY"]}
 
+def moderate_content(caption: str) -> bool:
+    """
+    Stub for Gemini AI moderation pipeline.
+    Returns True if flagged, False otherwise.
+    """
+    caption_lower = caption.lower()
+    if "test_nsfw" in caption_lower or "profanity_stub" in caption_lower:
+        return True
+    return False
+
 @app.post("/posts", response_model=PostResponse)
 def api_create_post(post: PostCreate):
     # 1. Analyze with AI
     analysis = analyze_post_content(post.caption, post.place_name, post.place_category)
     
     if not analysis.get("is_safe", True):
-        raise HTTPException(status_code=400, detail="Content flagged by safety moderation.")
+        # We still flag it and commit, just log or you could raise
+        pass
         
     # 2. Add AI results to post data
     post_dict = post.dict()
+    is_flagged = moderate_content(post.caption)
+    
+    # Check original safety too
+    if not analysis.get("is_safe", True):
+        is_flagged = True
+        
     post_dict.update({
         "cta_text": analysis.get("cta_text"),
         "cta_action": analysis.get("cta_action"),
-        "is_safe": True
+        "is_safe": analysis.get("is_safe", True),
+        "is_flagged": is_flagged
     })
     
     # 3. Save to database

@@ -12,6 +12,7 @@ class Post {
   final String? ctaText;
   final String? ctaAction;
   final bool isSafe;
+  final bool isFlagged;
   final String? placeName;
   final String? placeCategory;
   final DateTime? expiresAt;
@@ -30,6 +31,7 @@ class Post {
     this.ctaText,
     this.ctaAction,
     this.isSafe = true,
+    this.isFlagged = false,
     this.placeName,
     this.placeCategory,
     this.expiresAt,
@@ -50,6 +52,7 @@ class Post {
       ctaText: json['cta_text'],
       ctaAction: json['cta_action'],
       isSafe: json['is_safe'] ?? true,
+      isFlagged: json['is_flagged'] ?? false,
       placeName: json['place_name'],
       placeCategory: json['place_category'],
       expiresAt: json['expires_at'] != null ? DateTime.parse(json['expires_at']) : null,
@@ -66,6 +69,7 @@ class Post {
       'owner_id': ownerId,
       'visibility_type': visibilityType,
       'reach': reach,
+      'is_flagged': isFlagged,
       'place_name': placeName,
       'place_category': placeCategory,
       'expires_at': expiresAt?.toIso8601String(),
