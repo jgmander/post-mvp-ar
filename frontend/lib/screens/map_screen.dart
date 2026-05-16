@@ -1043,10 +1043,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               const SizedBox(height: 16),
               StatefulBuilder(
                 builder: (context, setState) {
-                  Timer? pressTimer;
+                  int tapCount = 0;
                   return GestureDetector(
-                    onTapDown: (_) {
-                      pressTimer = Timer(const Duration(seconds: 3), () async {
+                    onTap: () async {
+                      tapCount++;
+                      if (tapCount >= 5) {
+                        tapCount = 0;
                         final user = AuthService().currentUser;
                         if (user != null) {
                           final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -1055,10 +1057,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
                           }
                         }
-                      });
+                      }
                     },
-                    onTapUp: (_) => pressTimer?.cancel(),
-                    onTapCancel: () => pressTimer?.cancel(),
                     child: const Padding(
                       padding: EdgeInsets.all(8.0),
                       child: Text('v1.0.0', style: TextStyle(color: _PostColors.divider, fontSize: 12)),
