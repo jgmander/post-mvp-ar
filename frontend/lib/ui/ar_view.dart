@@ -9,6 +9,9 @@ import '../services/api_service.dart';
 import '../models/post.dart';
 import 'ar_onboarding_overlay.dart';
 import '../services/auth_service.dart';
+import 'admin_dashboard.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
 
 class ArView extends StatefulWidget {
   const ArView({Key? key}) : super(key: key);
@@ -678,6 +681,32 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                   ),
                   child: const Text('Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
+              ),
+              const SizedBox(height: 16),
+              StatefulBuilder(
+                builder: (context, setState) {
+                  Timer? pressTimer;
+                  return GestureDetector(
+                    onTapDown: (_) {
+                      pressTimer = Timer(const Duration(seconds: 3), () async {
+                        final user = AuthService().currentUser;
+                        if (user != null) {
+                          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                          if (doc.exists && doc.data()?['role'] == 'admin') {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
+                          }
+                        }
+                      });
+                    },
+                    onTapUp: (_) => pressTimer?.cancel(),
+                    onTapCancel: () => pressTimer?.cancel(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text('v1.0.0', style: TextStyle(color: Color(0xFF252D3F), fontSize: 12)),
+                    ),
+                  );
+                }
               ),
             ],
           ),

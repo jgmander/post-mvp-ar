@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -29,6 +30,16 @@ class AuthService {
   Future<void> upgradeWithEmail(String email, String password) async {
     // Scaffold for upgrade path
     print("Scaffold: Upgrade account with $email");
+    if (_auth.currentUser != null) {
+      await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+        'uid': _auth.currentUser!.uid,
+        'email': email,
+        'role': 'user',
+        'tier': 'free',
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      print("User profile generated in Firestore");
+    }
   }
 
   Future<void> signOut() async {
