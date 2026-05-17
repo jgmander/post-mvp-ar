@@ -31,8 +31,7 @@ class AuthService {
   Future<void> linkWithGoogle() async {
     final GoogleSignIn googleSignIn = GoogleSignIn();
     try {
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return; // User canceled
+      final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
       
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final OAuthCredential credential = GoogleAuthProvider.credential(
