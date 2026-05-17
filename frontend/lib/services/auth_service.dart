@@ -38,7 +38,8 @@ class AuthService {
     }
 
     try {
-      final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
+      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
+      if (googleUser == null) return; // User canceled
       
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final OAuthCredential credential = GoogleAuthProvider.credential(
@@ -47,8 +48,17 @@ class AuthService {
       );
 
       if (_auth.currentUser != null) {
-        await _auth.currentUser!.linkWithCredential(credential);
-        print("Successfully linked anonymous account with Google");
+        try {
+          await _auth.currentUser!.linkWithCredential(credential);
+          print("Successfully linked anonymous account with Google");
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use') {
+            print("Credential already in use, pivoting to standard sign-in");
+            await _auth.signInWithCredential(credential);
+          } else {
+            rethrow;
+          }
+        }
         
         await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
           'uid': _auth.currentUser!.uid,
