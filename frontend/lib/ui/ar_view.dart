@@ -1014,30 +1014,42 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
             // ── RETICLE: Glowing cyan ring (always visible) ──
             Center(
-              child: AnimatedBuilder(
-                animation: _reticleGlowAnimation,
-                builder: (context, child) {
-                  final isLocked = _isAuraTargetingBuilding && hasVPS;
-                  return Container(
-                    width: isLocked ? 90 : 70,
-                    height: isLocked ? 90 : 70,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isLocked
-                          ? Colors.cyanAccent.withOpacity(0.9)
-                          : Colors.white.withOpacity(_reticleGlowAnimation.value),
-                        width: isLocked ? 3 : 1.5,
-                      ),
-                      boxShadow: isLocked ? [
-                        BoxShadow(color: Colors.cyanAccent.withOpacity(0.5), blurRadius: 25, spreadRadius: 8),
-                      ] : [],
-                    ),
-                    child: isLocked
-                      ? Center(child: Icon(Icons.add_circle_outline, color: Colors.cyanAccent, size: 32))
-                      : null,
-                  );
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  if (hasVPS) {
+                    _dropGhostPin();
+                  }
                 },
+                child: Padding(
+                  padding: const EdgeInsets.all(40.0),
+                  child: AnimatedBuilder(
+                    animation: _reticleGlowAnimation,
+                    builder: (context, child) {
+                      final isLocked = _isAuraTargetingBuilding && hasVPS;
+                      return Container(
+                        width: isLocked ? 90 : 70,
+                        height: isLocked ? 90 : 70,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isLocked
+                              ? Colors.cyanAccent.withOpacity(0.9)
+                              : Colors.white.withOpacity(_reticleGlowAnimation.value),
+                            width: isLocked ? 3 : 1.5,
+                          ),
+                          boxShadow: isLocked ? [
+                            BoxShadow(color: Colors.cyanAccent.withOpacity(0.5), blurRadius: 25, spreadRadius: 8),
+                          ] : [],
+                        ),
+                        child: isLocked
+                          ? Center(child: Icon(Icons.push_pin_rounded, color: Colors.cyanAccent, size: 32))
+                          : null,
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
 
