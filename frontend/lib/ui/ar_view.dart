@@ -460,6 +460,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                                 reach: 50,
                                 placeName: placeName,
                                 placeCategory: placeCategory,
+                                expiresAt: DateTime.now().add(const Duration(hours: 24)),
                               );
 
                               final created = await _apiService.createPost(newPost);
