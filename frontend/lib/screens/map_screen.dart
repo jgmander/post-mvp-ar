@@ -1077,30 +1077,33 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 style: const TextStyle(color: _PostColors.textSecondary, fontSize: 14, height: 1.4),
               ),
               const SizedBox(height: 32),
-              TextField(
-                style: const TextStyle(color: _PostColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Email address',
-                  hintStyle: const TextStyle(color: _PostColors.textSecondary),
-                  filled: true,
-                  fillColor: _PostColors.surfaceAlt,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 height: 54,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auth providers coming soon!')));
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await AuthService().linkWithGoogle();
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Successfully linked with Google!')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Failed to link account.')),
+                        );
+                      }
+                    }
                   },
+                  icon: const Icon(Icons.g_mobiledata_rounded, color: _PostColors.surface, size: 32),
+                  label: const Text('Continue with Google', style: TextStyle(color: _PostColors.surface, fontSize: 16, fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _PostColors.brand,
+                    backgroundColor: _PostColors.textPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(height: 16),

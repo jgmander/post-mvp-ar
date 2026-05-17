@@ -674,30 +674,34 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                 style: const TextStyle(color: Color(0xFF8896B0), fontSize: 14, height: 1.4),
               ),
               const SizedBox(height: 32),
-              TextField(
-                style: const TextStyle(color: Color(0xFFF0F4FF)),
-                decoration: InputDecoration(
-                  hintText: 'Email address',
-                  hintStyle: const TextStyle(color: Color(0xFF8896B0)),
-                  filled: true,
-                  fillColor: const Color(0xFF1E2433),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 height: 54,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Auth providers coming soon!')));
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      await AuthService().linkWithGoogle();
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Successfully linked with Google!')),
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Failed to link account.')),
+                        );
+                      }
+                    }
                   },
+                  icon: const Icon(Icons.g_mobiledata_rounded, color: Color(0xFF161B25), size: 32),
+                  label: const Text('Continue with Google', style: TextStyle(color: Color(0xFF161B25), fontSize: 16, fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F8EF7),
+                    backgroundColor: const Color(0xFFF0F4FF),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Continue', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
               ),
               const SizedBox(height: 16),
