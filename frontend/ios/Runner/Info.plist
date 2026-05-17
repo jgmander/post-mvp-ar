@@ -81,5 +81,16 @@
 	</array>
 	<key>io.flutter.embedded_views_preview</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.364975840465-refrthvrpr2vvfo8pbt06cvfvpm4s2jn</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
