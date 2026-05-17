@@ -36,7 +36,7 @@ class AuthService {
       
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       final OAuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
+        accessToken: null, // Removed in google_sign_in 7.x
         idToken: googleAuth.idToken,
       );
 
