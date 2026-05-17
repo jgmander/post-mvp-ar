@@ -1,1 +1,1 @@
-Sprint 5.2b
+Sprint 5.2

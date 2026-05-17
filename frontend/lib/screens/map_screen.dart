@@ -1178,7 +1178,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: _PostColors.brand, fontSize: 14, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _PostColors.brand.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _PostColors.brand.withValues(alpha: 0.3)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: _PostColors.brand, size: 20),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Ghost posts remain securely anonymous. Posts dropped while logged in appear here for you to manage.',
+                        style: TextStyle(color: _PostColors.textSecondary, fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -1213,7 +1234,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           expiresAt = DateTime.tryParse(data['expires_at']);
                         }
                         
-                        String countdown = 'Unknown';
+                        String countdown = 'Syncing...';
                         if (expiresAt != null) {
                           final diff = expiresAt.difference(DateTime.now());
                           if (diff.isNegative) {
@@ -1242,6 +1263,49 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_rounded, color: _PostColors.textSecondary),
+                                  onPressed: () {
+                                    final TextEditingController controller = TextEditingController(text: caption);
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          backgroundColor: _PostColors.surface,
+                                          title: const Text('Edit Post', style: TextStyle(color: _PostColors.textPrimary)),
+                                          content: TextField(
+                                            controller: controller,
+                                            style: const TextStyle(color: _PostColors.textPrimary),
+                                            decoration: const InputDecoration(
+                                              hintText: 'Update your caption...',
+                                              hintStyle: TextStyle(color: _PostColors.textSecondary),
+                                            ),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Cancel', style: TextStyle(color: _PostColors.textSecondary)),
+                                            ),
+                                            TextButton(
+                                              onPressed: () async {
+                                                if (controller.text.trim().isNotEmpty) {
+                                                  await doc.reference.update({'caption': controller.text.trim()});
+                                                  if (context.mounted) {
+                                                    Navigator.pop(context);
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Post updated')),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              child: const Text('Save', style: TextStyle(color: _PostColors.brand)),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
                                 IconButton(
                                   icon: const Icon(Icons.timer, color: _PostColors.brand),
                                   onPressed: () async {
