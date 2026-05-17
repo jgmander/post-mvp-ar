@@ -1146,6 +1146,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       isScrollControlled: true,
       builder: (context) {
         return Container(
+          height: MediaQuery.of(context).size.height * 0.75,
           decoration: const BoxDecoration(
             color: _PostColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -1157,7 +1158,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             top: 14,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.max,
             children: [
               Container(
                 width: 40, height: 4,
@@ -1177,7 +1178,105 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: _PostColors.brand, fontSize: 14, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('posts')
+                      .where('owner_id', isEqualTo: user?.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: _PostColors.brand));
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          "You haven't dropped any persistent posts yet.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: _PostColors.textSecondary, fontSize: 16),
+                        ),
+                      );
+                    }
+                    
+                    final docs = snapshot.data!.docs;
+                    return ListView.builder(
+                      itemCount: docs.length,
+                      itemBuilder: (context, index) {
+                        final doc = docs[index];
+                        final data = doc.data() as Map<String, dynamic>;
+                        final caption = data['caption'] ?? data['message_content'] ?? 'Untitled';
+                        DateTime? expiresAt;
+                        if (data['expires_at'] is Timestamp) {
+                          expiresAt = (data['expires_at'] as Timestamp).toDate();
+                        } else if (data['expires_at'] is String) {
+                          expiresAt = DateTime.tryParse(data['expires_at']);
+                        }
+                        
+                        String countdown = 'Unknown';
+                        if (expiresAt != null) {
+                          final diff = expiresAt.difference(DateTime.now());
+                          if (diff.isNegative) {
+                            countdown = 'Expired';
+                          } else {
+                            countdown = 'Expires in ${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
+                          }
+                        }
+
+                        return Card(
+                          color: _PostColors.surfaceAlt,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            title: Text(
+                              caption,
+                              style: const TextStyle(color: _PostColors.textPrimary, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              countdown,
+                              style: const TextStyle(color: _PostColors.brand, fontSize: 12),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.timer, color: _PostColors.brand),
+                                  onPressed: () async {
+                                    final newExpiry = DateTime.now().add(const Duration(hours: 24));
+                                    await doc.reference.update({
+                                      'expires_at': Timestamp.fromDate(newExpiry)
+                                    });
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('TTL Extended by 24h')),
+                                      );
+                                    }
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
+                                  onPressed: () async {
+                                    await doc.reference.delete();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Post deleted')),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 height: 54,
