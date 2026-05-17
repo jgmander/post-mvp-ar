@@ -28,8 +28,15 @@ class AuthService {
   }
 
   // Placeholder for future email/oauth integration
+  bool _isGoogleSignInInitialized = false;
+
   Future<void> linkWithGoogle() async {
-    final GoogleSignIn googleSignIn = GoogleSignIn();
+    final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+    if (!_isGoogleSignInInitialized) {
+      await googleSignIn.initialize();
+      _isGoogleSignInInitialized = true;
+    }
+
     try {
       final GoogleSignInAccount googleUser = await googleSignIn.authenticate();
       
