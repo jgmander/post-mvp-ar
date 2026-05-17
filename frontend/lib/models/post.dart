@@ -40,12 +40,15 @@ class Post {
   });
 
   factory Post.fromJson(Map<String, dynamic> json) {
+    dynamic expiresAtRaw = json['expires_at'];
     DateTime? parsedExpiresAt;
-    if (json['expires_at'] != null) {
-      if (json['expires_at'] is Timestamp) {
-        parsedExpiresAt = (json['expires_at'] as Timestamp).toDate();
-      } else if (json['expires_at'] is String) {
-        parsedExpiresAt = DateTime.parse(json['expires_at']);
+    if (expiresAtRaw != null) {
+      if (expiresAtRaw is String) {
+        parsedExpiresAt = DateTime.tryParse(expiresAtRaw);
+      } else if (expiresAtRaw is Timestamp) {
+        parsedExpiresAt = expiresAtRaw.toDate();
+      } else {
+        parsedExpiresAt = DateTime.now().add(const Duration(hours: 24));
       }
     }
 

@@ -1145,21 +1145,23 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: const BoxDecoration(
-            color: _PostColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            left: 24,
-            right: 24,
-            top: 14,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.max,
-            children: [
+        return Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.75,
+            decoration: const BoxDecoration(
+              color: _PostColors.surface,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            padding: const EdgeInsets.only(
+              bottom: 24,
+              left: 24,
+              right: 24,
+              top: 14,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.max,
+              children: [
               Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(color: _PostColors.divider, borderRadius: BorderRadius.circular(2)),
@@ -1356,11 +1358,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       );
                     }
                   },
-                  icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 24),
-                  label: const Text('Log Out', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white),
+                  label: const Text('Sign Out', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    backgroundColor: Colors.redAccent.withValues(alpha: 0.8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                 ),
               ),
