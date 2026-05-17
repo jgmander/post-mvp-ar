@@ -1192,7 +1192,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Ghost posts remain securely anonymous. Posts dropped while logged in appear here for you to manage.',
+                        'Anonymous posts remain completely private. Posts dropped while logged in appear here.',
                         style: TextStyle(color: _PostColors.textSecondary, fontSize: 12, height: 1.4),
                       ),
                     ),
@@ -1234,14 +1234,16 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           expiresAt = DateTime.tryParse(data['expires_at']);
                         }
                         
-                        String countdown = 'Syncing...';
-                        if (expiresAt != null) {
-                          final diff = expiresAt.difference(DateTime.now());
-                          if (diff.isNegative) {
-                            countdown = 'Expired';
-                          } else {
-                            countdown = 'Expires in ${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
-                          }
+                        if (expiresAt == null) {
+                          expiresAt = DateTime.now().add(const Duration(hours: 24));
+                        }
+                        
+                        String countdown = 'Unknown';
+                        final diff = expiresAt.difference(DateTime.now());
+                        if (diff.isNegative) {
+                          countdown = 'Expired';
+                        } else {
+                          countdown = 'Expires in ${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
                         }
 
                         return Card(
