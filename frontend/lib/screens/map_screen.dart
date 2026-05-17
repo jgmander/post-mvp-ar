@@ -1136,6 +1136,76 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _showAuthenticatedProfileSheet(BuildContext context) {
+    final user = AuthService().currentUser;
+    final displayName = user?.displayName ?? user?.email ?? 'Authenticated User';
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: _PostColors.surface,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: 24,
+            right: 24,
+            top: 14,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: _PostColors.divider, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 24),
+              const Icon(Icons.account_circle_rounded, color: _PostColors.brand, size: 64),
+              const SizedBox(height: 16),
+              Text(
+                displayName,
+                style: const TextStyle(color: _PostColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Identity Claimed',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _PostColors.brand, fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await AuthService().signOut();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Logged out successfully')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 24),
+                  label: const Text('Log Out', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // Building-safe dark map style.
   // CRITICAL: The old style used {"elementType":"geometry"} globally, which
   // flattened all 3D building meshes to #212121 — identical to road surface.
@@ -1227,7 +1297,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 if (user == null || user.isAnonymous) {
                   _showLoginBottomSheet(context);
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile view coming soon!')));
+                  _showAuthenticatedProfileSheet(context);
                 }
               },
               child: const Icon(

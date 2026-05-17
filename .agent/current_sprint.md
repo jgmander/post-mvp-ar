@@ -8,7 +8,7 @@
   - iOS (Build 19) and Android (versionCode 19) synced to production parity
   - TestFlight IPA compiled and Xcode Organizer opened for distribution
 ## Current Phase
-* Sprint 5.1 - Google SSO & Anonymous Account Linking
+* Sprint 5.1b - Authenticated Profile UX & Safe Logout
 ## Priorities
 * Monitor TestFlight review pipeline
 * UX audit of Ghost-Pin AR interaction
