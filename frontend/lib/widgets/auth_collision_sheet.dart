@@ -122,6 +122,40 @@ class AuthCollisionBottomSheet extends StatelessWidget {
                 ),
               ),
             ),
+          if (availableProviders.contains('apple.com')) ...[
+            if (availableProviders.contains('google.com')) const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  HapticFeedback.mediumImpact();
+                  try {
+                    await AuthService().signInWithApple();
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Accounts successfully merged!')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Failed to link Apple: ${e.toString()}')),
+                      );
+                    }
+                  }
+                },
+                icon: const Icon(Icons.apple_rounded, color: Colors.white, size: 28),
+                label: const Text('Continue with Apple', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  side: const BorderSide(color: Colors.white24, width: 1),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

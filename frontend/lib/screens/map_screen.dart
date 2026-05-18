@@ -1093,8 +1093,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       }
                     } catch (e) {
                       if (context.mounted) {
+                        if (e is FirebaseAuthException && 
+                            (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use')) {
+                          final email = AuthService().lastCollisionEmail ?? '';
+                          if (email.isNotEmpty) {
+                            final providers = await AuthService().getProvidersForEmail(email);
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close the login sheet
+                              showModalBottomSheet(
+                                context: context,
+                                backgroundColor: Colors.transparent,
+                                isScrollControlled: true,
+                                builder: (_) => AuthCollisionBottomSheet(
+                                  email: email,
+                                  availableProviders: providers,
+                                ),
+                              );
+                              return;
+                            }
+                          }
+                        }
+                        
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Failed to link account.')),
+                          SnackBar(content: Text('Failed to link account: ${e.toString()}')),
                         );
                       }
                     }

@@ -21,8 +21,9 @@ class AuthService {
   bool hasDroppedFreePost = false;
 
   // Collision Resolution Cache
-  OAuthCredential? _pendingAppleCredential;
+  OAuthCredential? _pendingGoogleCredential;
   String? lastCollisionEmail;
+  String? lastCollidedProvider;
 
   Future<void> signInAnonymously() async {
     if (_auth.currentUser == null) {
@@ -59,39 +60,20 @@ class AuthService {
         try {
           await _auth.currentUser!.linkWithCredential(credential);
           print("Successfully linked anonymous account with Google");
-          
-          if (_pendingAppleCredential != null) {
-            try {
-              await _auth.currentUser!.linkWithCredential(_pendingAppleCredential!);
-              print("Successfully fused pending Apple credential to Google session");
-            } catch (fusionError) {
-              print("Failed to fuse pending credential: $fusionError");
-            } finally {
-              _pendingAppleCredential = null;
-            }
-          }
         } on FirebaseAuthException catch (e) {
           if (e.code == 'credential-already-in-use') {
             print("Credential already in use, pivoting to standard sign-in");
             await _auth.signInWithCredential(credential);
-            
-            if (_pendingAppleCredential != null) {
-              try {
-                await _auth.currentUser!.linkWithCredential(_pendingAppleCredential!);
-                print("Successfully fused pending Apple credential to Google session");
-              } catch (fusionError) {
-                print("Failed to fuse pending credential: $fusionError");
-              } finally {
-                _pendingAppleCredential = null;
-              }
-            }
             return;
           } else if (e.code == 'provider-already-linked') {
             print("Google provider already linked to this session. Proceeding.");
             // Treat as success — user is already authenticated with this provider.
           } else if (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use') {
-            print("Email collision: ${e.code}");
-            throw Exception("An account already exists with the same email address but different sign-in credentials. Please sign in using a provider associated with this email address.");
+            print("Email collision detected. Caching Google credential and rethrowing for UI interception.");
+            _pendingGoogleCredential = credential;
+            lastCollisionEmail = googleUser.email;
+            lastCollidedProvider = 'google.com';
+            rethrow;
           } else {
             rethrow;
           }
@@ -160,23 +142,45 @@ class AuthService {
         try {
           await _auth.currentUser!.linkWithCredential(credential);
           print("Successfully linked anonymous account with Apple");
+          
+          if (_pendingGoogleCredential != null) {
+            try {
+              await _auth.currentUser!.linkWithCredential(_pendingGoogleCredential!);
+              print("Successfully fused pending Google credential to Apple session");
+            } catch (e) {
+              print("Failed to fuse pending Google credential: $e");
+            } finally {
+              _pendingGoogleCredential = null;
+            }
+          }
         } on FirebaseAuthException catch (e) {
           if (e.code == 'credential-already-in-use') {
             print("Credential already in use, pivoting to standard sign-in");
             await _auth.signInWithCredential(credential);
+            
+            if (_pendingGoogleCredential != null) {
+              try {
+                await _auth.currentUser!.linkWithCredential(_pendingGoogleCredential!);
+                print("Successfully fused pending Google credential to Apple session");
+              } catch (e) {
+                print("Failed to fuse pending Google credential: $e");
+              } finally {
+                _pendingGoogleCredential = null;
+              }
+            }
             return;
           } else if (e.code == 'provider-already-linked') {
             print("Apple provider already linked to this session. Proceeding.");
             // Treat as success — user is already authenticated with this provider.
           } else if (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use') {
-            print("Email collision detected. Caching Apple credential and rethrowing for UI interception.");
-            _pendingAppleCredential = credential;
+            print("Email collision detected. Extracting JWT and rethrowing for UI interception.");
             
             String collisionEmail = appleIdCredential.email ?? '';
             if (collisionEmail.isEmpty && appleIdCredential.identityToken != null) {
               collisionEmail = _decodeEmailFromJwt(appleIdCredential.identityToken!);
             }
             lastCollisionEmail = collisionEmail;
+            lastCollidedProvider = 'apple.com';
             
             rethrow;
           } else {
@@ -222,13 +226,15 @@ class AuthService {
 
   Future<void> signOut() async {
     await _auth.signOut();
-    _pendingAppleCredential = null;
+    _pendingGoogleCredential = null;
     await signInAnonymously();
   }
 
   Future<List<String>> getProvidersForEmail(String email) async {
     // fetchSignInMethodsForEmail was removed in firebase_auth 5.0 for security.
-    // Since we only support Google and Apple, if Apple collides, it MUST be Google.
-    return ['google.com'];
+    // Since we only support Google and Apple, we use deductive routing.
+    if (lastCollidedProvider == 'apple.com') return ['google.com'];
+    if (lastCollidedProvider == 'google.com') return ['apple.com'];
+    return ['google.com', 'apple.com'];
   }
 }
