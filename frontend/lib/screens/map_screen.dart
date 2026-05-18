@@ -1125,7 +1125,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       if (context.mounted) {
                         if (e is FirebaseAuthException && 
                             (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use')) {
-                          final email = e.email ?? '';
+                          final email = AuthService().lastCollisionEmail ?? '';
                           if (email.isNotEmpty) {
                             final providers = await AuthService().getProvidersForEmail(email);
                             if (context.mounted) {

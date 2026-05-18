@@ -22,6 +22,7 @@ class AuthService {
 
   // Collision Resolution Cache
   OAuthCredential? _pendingAppleCredential;
+  String? lastCollisionEmail;
 
   Future<void> signInAnonymously() async {
     if (_auth.currentUser == null) {
@@ -122,6 +123,20 @@ class AuthService {
     return digest.toString();
   }
 
+  String _decodeEmailFromJwt(String jwt) {
+    try {
+      final parts = jwt.split('.');
+      if (parts.length != 3) return '';
+      final payload = parts[1];
+      var normalized = base64Url.normalize(payload);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      final data = json.decode(decoded);
+      return data['email'] ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   Future<void> signInWithApple() async {
     try {
       final rawNonce = _generateNonce();
@@ -156,6 +171,13 @@ class AuthService {
           } else if (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use') {
             print("Email collision detected. Caching Apple credential and rethrowing for UI interception.");
             _pendingAppleCredential = credential;
+            
+            String collisionEmail = appleIdCredential.email ?? '';
+            if (collisionEmail.isEmpty && appleIdCredential.identityToken != null) {
+              collisionEmail = _decodeEmailFromJwt(appleIdCredential.identityToken!);
+            }
+            lastCollisionEmail = collisionEmail;
+            
             rethrow;
           } else {
             rethrow;
@@ -205,6 +227,8 @@ class AuthService {
   }
 
   Future<List<String>> getProvidersForEmail(String email) async {
-    return await _auth.fetchSignInMethodsForEmail(email);
+    // fetchSignInMethodsForEmail was removed in firebase_auth 5.0 for security.
+    // Since we only support Google and Apple, if Apple collides, it MUST be Google.
+    return ['google.com'];
   }
 }
