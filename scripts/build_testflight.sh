@@ -11,8 +11,7 @@ flutter pub get
 
 # 2. Extract Secrets
 # Note: We fetch the live maps key securely. 
-echo "Extracting GCP Secrets..."
-export LIVE_MAPS_KEY=$(gcloud secrets versions access latest --secret="MAPS_API_KEY" 2>/dev/null)
+export LIVE_MAPS_KEY=$(gcloud secrets versions access latest --secret="MAPS_API_KEY" --project="dbomar-post-mvp" 2>/dev/null)
 
 # 3. Build the IPA
 echo "Building iOS IPA (Build 18)..."
