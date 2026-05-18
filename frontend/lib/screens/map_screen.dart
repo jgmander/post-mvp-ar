@@ -1038,7 +1038,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _showLoginBottomSheet(BuildContext context, {bool isLimitReached = false}) {
-    int tapCount = 0;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -1107,27 +1106,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 16),
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () async {
-                  tapCount++;
-                  HapticFeedback.lightImpact();
-                  if (tapCount >= 5) {
-                    tapCount = 0;
-                    final user = AuthService().currentUser;
-                    if (user != null) {
-                      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                      if (doc.exists && doc.data()?['role'] == 'admin') {
-                        Navigator.pop(context);
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
-                      }
-                    }
-                  }
-                },
-                child: const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('v1.0.0', style: TextStyle(color: _PostColors.divider, fontSize: 12)),
-                ),
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('v1.0.0', style: TextStyle(color: _PostColors.divider, fontSize: 12)),
               ),
             ],
           ),
@@ -1345,6 +1326,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 ),
               ),
               const SizedBox(height: 16),
+              // RBAC Admin Dashboard Button
+              if (user != null)
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      final role = (snapshot.data!.data() as Map<String, dynamic>?)?['role'];
+                      if (role == 'admin') {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 54,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
+                              },
+                              icon: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white),
+                              label: const Text('Admin Dashboard', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1E2A40),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
               SizedBox(
                 width: double.infinity,
                 height: 54,
