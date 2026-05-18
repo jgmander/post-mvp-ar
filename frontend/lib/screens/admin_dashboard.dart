@@ -85,11 +85,42 @@ class AdminDashboardScreen extends StatelessWidget {
                       itemBuilder: (context, index) {
                         final data = docs[index].data() as Map<String, dynamic>;
                         final caption = data['caption'] ?? 'No Caption';
-                        final flaggedId = docs[index].id;
-                        return ListTile(
-                          title: Text(caption, style: const TextStyle(color: Colors.white)),
-                          subtitle: Text('ID: $flaggedId', style: const TextStyle(color: Color(0xFF8896B0))),
-                          trailing: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent),
+                        return Card(
+                          color: const Color(0xFF161B25),
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            title: Text(caption, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            subtitle: Text('Owner: ${data['owner_id'] ?? 'Unknown'}', style: const TextStyle(color: Color(0xFF8896B0), fontSize: 12)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.greenAccent),
+                                  onPressed: () async {
+                                    await docs[index].reference.update({'is_flagged': false});
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Post dismissed from moderation queue.')),
+                                      );
+                                    }
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
+                                  onPressed: () async {
+                                    await docs[index].reference.delete();
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Post permanently deleted.')),
+                                      );
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
                         );
                       },
                     );
