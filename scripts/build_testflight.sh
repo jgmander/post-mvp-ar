@@ -14,10 +14,10 @@ flutter pub get
 export LIVE_MAPS_KEY=$(gcloud secrets versions access latest --secret="MAPS_API_KEY" --project="dbomar-post-mvp" 2>/dev/null)
 
 # 3. Build the IPA
-echo "Building iOS IPA (Build 18)..."
+echo "Building iOS IPA (Build 20)..."
 flutter build ipa --release \
   --build-name=1.0.0 \
-  --build-number=18 \
+  --build-number=20 \
   --export-options-plist=ios/config/ExportOptions.plist \
   --dart-define=MAPS_API_KEY="$LIVE_MAPS_KEY" \
   --dart-define=IOS_MAP_ID="1bf9740a3948b2695b963ae7" \
