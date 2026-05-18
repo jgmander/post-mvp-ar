@@ -49,6 +49,7 @@ dependencies:
   geocoding: ^4.0.0
   firebase_auth: ^6.5.1
   google_sign_in: ^7.2.0
+  sign_in_with_apple: ^8.0.0
 
 dev_dependencies:
   flutter_test:

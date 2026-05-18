@@ -1,7 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
@@ -70,6 +70,47 @@ class AuthService {
       }
     } catch (e) {
       print("Error linking with Google: $e");
+      rethrow;
+    }
+  }
+
+  Future<void> signInWithApple() async {
+    try {
+      final appleIdCredential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+      );
+
+      final OAuthCredential credential = OAuthProvider('apple.com').credential(
+        idToken: appleIdCredential.identityToken,
+        accessToken: appleIdCredential.authorizationCode,
+      );
+
+      if (_auth.currentUser != null) {
+        try {
+          await _auth.currentUser!.linkWithCredential(credential);
+          print("Successfully linked anonymous account with Apple");
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use') {
+            print("Credential already in use, pivoting to standard sign-in");
+            await _auth.signInWithCredential(credential);
+          } else {
+            rethrow;
+          }
+        }
+        
+        await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+          'uid': _auth.currentUser!.uid,
+          'email': appleIdCredential.email ?? 'apple_hidden',
+          'role': 'user',
+          'tier': 'free',
+          'createdAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+    } catch (e) {
+      print("Error signing in with Apple: $e");
       rethrow;
     }
   }
