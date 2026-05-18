@@ -20,6 +20,9 @@ class AuthService {
   // Value-Gated Progressive Profiling: Local Session State
   bool hasDroppedFreePost = false;
 
+  // Collision Resolution Cache
+  OAuthCredential? _pendingAppleCredential;
+
   Future<void> signInAnonymously() async {
     if (_auth.currentUser == null) {
       try {
@@ -55,13 +58,39 @@ class AuthService {
         try {
           await _auth.currentUser!.linkWithCredential(credential);
           print("Successfully linked anonymous account with Google");
+          
+          if (_pendingAppleCredential != null) {
+            try {
+              await _auth.currentUser!.linkWithCredential(_pendingAppleCredential!);
+              print("Successfully fused pending Apple credential to Google session");
+            } catch (fusionError) {
+              print("Failed to fuse pending credential: $fusionError");
+            } finally {
+              _pendingAppleCredential = null;
+            }
+          }
         } on FirebaseAuthException catch (e) {
           if (e.code == 'credential-already-in-use') {
             print("Credential already in use, pivoting to standard sign-in");
             await _auth.signInWithCredential(credential);
+            
+            if (_pendingAppleCredential != null) {
+              try {
+                await _auth.currentUser!.linkWithCredential(_pendingAppleCredential!);
+                print("Successfully fused pending Apple credential to Google session");
+              } catch (fusionError) {
+                print("Failed to fuse pending credential: $fusionError");
+              } finally {
+                _pendingAppleCredential = null;
+              }
+            }
+            return;
           } else if (e.code == 'provider-already-linked') {
             print("Google provider already linked to this session. Proceeding.");
             // Treat as success — user is already authenticated with this provider.
+          } else if (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use') {
+            print("Email collision: ${e.code}");
+            throw Exception("An account already exists with the same email address but different sign-in credentials. Please sign in using a provider associated with this email address.");
           } else {
             rethrow;
           }
@@ -108,8 +137,8 @@ class AuthService {
 
       final OAuthCredential credential = OAuthProvider('apple.com').credential(
         idToken: appleIdCredential.identityToken,
-        accessToken: appleIdCredential.authorizationCode,
         rawNonce: rawNonce,
+        accessToken: appleIdCredential.authorizationCode,
       );
 
       if (_auth.currentUser != null) {
@@ -120,21 +149,33 @@ class AuthService {
           if (e.code == 'credential-already-in-use') {
             print("Credential already in use, pivoting to standard sign-in");
             await _auth.signInWithCredential(credential);
+            return;
           } else if (e.code == 'provider-already-linked') {
             print("Apple provider already linked to this session. Proceeding.");
             // Treat as success — user is already authenticated with this provider.
+          } else if (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use') {
+            print("Email collision detected. Caching Apple credential and rethrowing for UI interception.");
+            _pendingAppleCredential = credential;
+            rethrow;
           } else {
             rethrow;
           }
         }
         
-        await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+        final Map<String, dynamic> userData = {
           'uid': _auth.currentUser!.uid,
-          'email': appleIdCredential.email ?? 'apple_hidden',
           'role': 'user',
           'tier': 'free',
           'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        };
+        if (appleIdCredential.email != null) {
+          userData['email'] = appleIdCredential.email;
+        }
+        
+        await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set(
+          userData, 
+          SetOptions(merge: true)
+        );
       }
     } catch (e) {
       print("Error signing in with Apple: $e");
@@ -159,6 +200,11 @@ class AuthService {
 
   Future<void> signOut() async {
     await _auth.signOut();
+    _pendingAppleCredential = null;
     await signInAnonymously();
+  }
+
+  Future<List<String>> getProvidersForEmail(String email) async {
+    return await _auth.fetchSignInMethodsForEmail(email);
   }
 }

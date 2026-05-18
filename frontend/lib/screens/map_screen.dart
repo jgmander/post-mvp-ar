@@ -14,6 +14,8 @@ import '../models/post.dart';
 import '../ui/ar_view.dart';
 import 'admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../widgets/auth_collision_sheet.dart';
 import 'dart:async';
 
 // ─── Brand Design Tokens ────────────────────────────────────────────────────
@@ -1121,8 +1123,32 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       }
                     } catch (e) {
                       if (context.mounted) {
+                        if (e is FirebaseAuthException && 
+                            (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use')) {
+                          final email = e.email ?? '';
+                          if (email.isNotEmpty) {
+                            final providers = await AuthService().getProvidersForEmail(email);
+                            if (context.mounted) {
+                              Navigator.pop(context); // Close the login sheet
+                              showModalBottomSheet(
+                                context: context,
+                                backgroundColor: Colors.transparent,
+                                isScrollControlled: true,
+                                builder: (_) => AuthCollisionBottomSheet(
+                                  email: email,
+                                  availableProviders: providers,
+                                ),
+                              );
+                              return;
+                            }
+                          }
+                        }
+                        
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Failed to sign in with Apple.')),
+                          SnackBar(
+                            content: Text(e.toString()),
+                            duration: const Duration(seconds: 5),
+                          ),
                         );
                       }
                     }
