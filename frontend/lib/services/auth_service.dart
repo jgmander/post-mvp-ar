@@ -59,6 +59,9 @@ class AuthService {
           if (e.code == 'credential-already-in-use') {
             print("Credential already in use, pivoting to standard sign-in");
             await _auth.signInWithCredential(credential);
+          } else if (e.code == 'provider-already-linked') {
+            print("Google provider already linked to this session. Proceeding.");
+            // Treat as success — user is already authenticated with this provider.
           } else {
             rethrow;
           }
@@ -117,6 +120,9 @@ class AuthService {
           if (e.code == 'credential-already-in-use') {
             print("Credential already in use, pivoting to standard sign-in");
             await _auth.signInWithCredential(credential);
+          } else if (e.code == 'provider-already-linked') {
+            print("Apple provider already linked to this session. Proceeding.");
+            // Treat as success — user is already authenticated with this provider.
           } else {
             rethrow;
           }
