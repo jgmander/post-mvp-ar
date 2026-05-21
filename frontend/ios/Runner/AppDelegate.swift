@@ -4,12 +4,14 @@ import GoogleMaps
 import ARKit
 import SceneKit
 import ARCoreGeospatial
+import CoreLocation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, ARSCNViewDelegate, ARSessionDelegate, GARSessionDelegate {
   private var arView: ARSCNView?
   private var methodChannel: FlutterMethodChannel?
   private var garSession: GARSession?
+  private let locationManager = CLLocationManager()
 
   override func application(
     _ application: UIApplication,
@@ -21,6 +23,9 @@ import ARCoreGeospatial
     
     // Must call super first — this initializes the Flutter engine and sets window.rootViewController
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    
+    // Explicitly request location permissions before GARSession localizes
+    locationManager.requestWhenInUseAuthorization()
     
     // Register all plugins with self (FlutterAppDelegate implements FlutterPluginRegistry)
     GeneratedPluginRegistrant.register(with: self)
@@ -147,11 +152,8 @@ import ARCoreGeospatial
 
   // MARK: - ARSessionDelegate
   func session(_ session: ARSession, didUpdate frame: ARFrame) {
-      do {
-          _ = try self.garSession?.update(frame)
-      } catch {
-          print("GARSession update error")
-      }
+      // Continuously pass Apple's ARFrame into Google's GARSession
+      _ = try? self.garSession?.update(frame)
   }
 
   // MARK: - GARSessionDelegate
