@@ -55,13 +55,13 @@ class ApiService {
   Future<Map<String, String>?> getPlaceFromCoordinates(double lat, double lng) async {
     if (_cachedMapsApiKey == null) {
       try {
-        final configResponse = await http.get(Uri.parse('\$baseUrl/v1/auth/config'));
+        final configResponse = await http.get(Uri.parse('$baseUrl/v1/auth/config'));
         if (configResponse.statusCode == 200) {
           final data = jsonDecode(configResponse.body);
           _cachedMapsApiKey = data['maps_api_key'];
         }
       } catch (e) {
-        print("Network error fetching auth config: \$e");
+        print("Network error fetching auth config: $e");
       }
     }
     
