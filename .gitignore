@@ -22,6 +22,8 @@ frontend/ios/.symlinks/
 
 # Required Guardrails
 *.json
+!firebase.json
+!firestore.indexes.json
 *.pem
 .env
 .secrets/
