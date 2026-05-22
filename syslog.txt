@@ -1,0 +1,1 @@
+To use 'Aiden’s iPhone' for development, enable Developer Mode in Settings → Privacy & Security on the device. If this does not work, open Xcode, reconnect the device, and look for a popup on the device asking you to trust this computer.
