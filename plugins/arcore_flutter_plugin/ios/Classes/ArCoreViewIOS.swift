@@ -17,7 +17,7 @@ import ARCoreGeospatial
 /// SAFETY: If the device does not support ARKit world tracking or
 /// GARSession (e.g., iPad), the view shows a graceful fallback label
 /// instead of crashing.
-public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, ARSCNViewDelegate {
+public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, ARSCNViewDelegate, CLLocationManagerDelegate {
 
     private var arView: ARSCNView?
     private var fallbackView: UIView?
@@ -49,6 +49,9 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         )
         super.init()
         self.methodChannel.setMethodCallHandler(handle)
+        // Assign delegate immediately so locationManagerDidChangeAuthorization
+        // fires on this instance (not AppDelegate) to restart the ARKit session.
+        self.locationManager.delegate = self
         print("DEBUG: [Post] ArCoreViewIOS init - ViewId: \(viewId)")
 
         // Parse creation args
@@ -213,12 +216,11 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         if authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways {
             config.worldAlignment = .gravityAndHeading
         } else {
-            config.worldAlignment = .gravity
-            // Request permission — when Flutter's permission bridge resolves,
-            // the "resume" MethodChannel call will restart with gravityAndHeading.
-            if authStatus == .notDetermined {
-                locationManager.requestWhenInUseAuthorization()
-            }
+            // SPRINT 6.3: Boot with .gravityAndHeading regardless.
+            // GARSession requires compass fusion from frame 0. The delegate callback
+            // locationManagerDidChangeAuthorization will restart the session once
+            // the user grants access, so there is no functional loss.
+            config.worldAlignment = .gravityAndHeading
         }
         
         let runException = ObjCExceptionCatcher.catchException {
@@ -484,6 +486,24 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                     "altitude": hitAlt
                 ]
             ])
+        }
+    }
+
+    // MARK: - CLLocationManagerDelegate
+    // Fires the moment the user grants location permission.
+    // Immediately restarts ARKit with .gravityAndHeading so GARSession
+    // gets compass-fused frames without requiring an app restart.
+    public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
+        guard isARSupported, let arView = arView else { return }
+        let config = ARWorldTrackingConfiguration()
+        config.worldAlignment = .gravityAndHeading
+        let exception = ObjCExceptionCatcher.catchException {
+            arView.session.run(config, options: [.resetTracking])
+        }
+        if exception == nil {
+            print("DEBUG: [Post] Permission granted — ARKit restarted with .gravityAndHeading")
         }
     }
 

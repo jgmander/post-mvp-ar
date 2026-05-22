@@ -7,10 +7,11 @@ import ARCoreGeospatial
 import CoreLocation
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, ARSCNViewDelegate, ARSessionDelegate, GARSessionDelegate {
+@objc class AppDelegate: FlutterAppDelegate, ARSCNViewDelegate, ARSessionDelegate, GARSessionDelegate, CLLocationManagerDelegate {
   private var arView: ARSCNView?
   private var methodChannel: FlutterMethodChannel?
   private var garSession: GARSession?
+  // Strong instance property — prevents deallocation before user responds to permission prompt.
   private let locationManager = CLLocationManager()
 
   override func application(
@@ -24,7 +25,9 @@ import CoreLocation
     // Must call super first — this initializes the Flutter engine and sets window.rootViewController
     let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     
-    // Explicitly request location permissions before GARSession localizes
+    // Assign delegate BEFORE requesting permission so locationManagerDidChangeAuthorization
+    // fires on this instance when the user responds to the system prompt.
+    locationManager.delegate = self
     locationManager.requestWhenInUseAuthorization()
     
     // Register all plugins with self (FlutterAppDelegate implements FlutterPluginRegistry)
@@ -82,7 +85,9 @@ import CoreLocation
         if #available(iOS 14.0, *) {
             if ARWorldTrackingConfiguration.isSupported {
                 let config = ARWorldTrackingConfiguration()
-                config.worldAlignment = .gravity
+                // SPRINT 6.3 FIX: .gravityAndHeading is required by GARSession for VPS.
+                // Without compass fusion, GARSession starves silently and never reaches TRACKING.
+                config.worldAlignment = .gravityAndHeading
                 self.arView?.session.run(config)
                 
                 guard let garSession = self.garSession, let arFrame = self.arView?.session.currentFrame else {
@@ -148,6 +153,20 @@ import CoreLocation
         result(FlutterMethodNotImplemented)
       }
     })
+  }
+
+  // MARK: - CLLocationManagerDelegate
+  // Called when the user responds to the permission prompt (iOS 14+).
+  // Restarts the ARKit session with .gravityAndHeading the instant access is granted,
+  // eliminating the boot-time race condition identified in Sprint 6.2.
+  func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+      let status = manager.authorizationStatus
+      guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
+      guard ARWorldTrackingConfiguration.isSupported else { return }
+      let config = ARWorldTrackingConfiguration()
+      config.worldAlignment = .gravityAndHeading
+      self.arView?.session.run(config, options: [.resetTracking])
+      print("DEBUG: [Post] Location permission granted — restarted ARKit with .gravityAndHeading")
   }
 
   // MARK: - ARSessionDelegate
