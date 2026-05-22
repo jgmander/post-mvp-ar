@@ -37,6 +37,9 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     // Throttle: only fire onCenterHitBuilding on value change
     private var lastCenterHitState: Bool = false
 
+    // Diagnostic: throttle earth state logging to ~1/sec
+    private var earthFrameCounter: Int = 0
+
     // Persistent location manager (avoid re-creating throwaway instances)
     private let locationManager = CLLocationManager()
 
@@ -557,6 +560,32 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         if let earth = validGarFrame.earth,
            earth.trackingState == .tracking {
             latestGeospatialTransform = earth.cameraGeospatialTransform
+        }
+
+        // DIAGNOSTIC: Throttled earth state log (~1/sec at 60fps) — always on, bypasses isDebug
+        earthFrameCounter += 1
+        if earthFrameCounter % 60 == 0 {
+            if let earth = validGarFrame.earth {
+                let ts: String
+                switch earth.trackingState {
+                case .tracking: ts = "TRACKING"
+                case .paused:   ts = "PAUSED"
+                case .stopped:  ts = "STOPPED"
+                @unknown default: ts = "UNKNOWN"
+                }
+                let es: String
+                switch earth.earthState {
+                case .enabled:                es = "enabled"
+                case .errorInternal:          es = "errorInternal"
+                case .errorNotAuthorized:     es = "errorNotAuthorized ⚠️ API key issue"
+                case .errorResourceExhausted: es = "errorResourceExhausted"
+                @unknown default:             es = "unknown(\(earth.earthState.rawValue))"
+                }
+                let acc = latestGeospatialTransform?.horizontalAccuracy ?? 999.0
+                print("DEBUG: [Post] GARSession earth=\(es) tracking=\(ts) acc=\(String(format: "%.1f", acc))m")
+            } else {
+                print("DEBUG: [Post] GARSession earth=nil (frame \(earthFrameCounter))")
+            }
         }
 
         // Update streetscape geometries
