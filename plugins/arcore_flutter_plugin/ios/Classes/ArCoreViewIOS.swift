@@ -334,22 +334,43 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     // MARK: - Geospatial Pose (mirrors getGeospatialPose)
 
     private func getGeospatialPose(result: FlutterResult) {
-        guard let transform = latestGeospatialTransform else {
-            result(FlutterError(code: "UNAVAILABLE",
-                                message: "Earth tracking state is not TRACKING",
-                                details: nil))
+        // If Earth has locked, return the full precision pose.
+        if let transform = latestGeospatialTransform {
+            let map: [String: Any] = [
+                "latitude": transform.coordinate.latitude,
+                "longitude": transform.coordinate.longitude,
+                "altitude": transform.altitude,
+                "heading": transform.heading,
+                "accuracy": transform.horizontalAccuracy
+            ]
+            debugLog("AUDIT: GeospatialPose acc=\(transform.horizontalAccuracy)m")
+            result(map)
             return
         }
 
-        let map: [String: Any] = [
-            "latitude": transform.coordinate.latitude,
-            "longitude": transform.coordinate.longitude,
-            "altitude": transform.altitude,
-            "heading": transform.heading,
-            "accuracy": transform.horizontalAccuracy
+        // SPRINT 6.3 FIX: While still LOCALIZING, return a partial pose with a
+        // sentinel accuracy of 999.0 — matching Android ARCore's behavior exactly.
+        // Without this, _currentPose stays null in Flutter and the VPS scanning
+        // badge (top-right) never renders, giving the user zero visual feedback.
+        let earth = latestFrame?.earth
+        let failureReason: String
+        switch earth?.earthState {
+        case .errorInternal: failureReason = "INTERNAL_ERROR"
+        case .errorNotAuthorized: failureReason = "NOT_AUTHORIZED"
+        case .errorResourceExhausted: failureReason = "RESOURCE_EXHAUSTED"
+        default: failureReason = "LOCALIZING"
+        }
+
+        let partialMap: [String: Any] = [
+            "latitude": 0.0,
+            "longitude": 0.0,
+            "altitude": 0.0,
+            "heading": 0.0,
+            "accuracy": 999.0,
+            "trackingFailureReason": failureReason
         ]
-        debugLog("AUDIT: GeospatialPose acc=\(transform.horizontalAccuracy)m")
-        result(map)
+        debugLog("AUDIT: GeospatialPose LOCALIZING — returning sentinel pose")
+        result(partialMap)
     }
 
     // MARK: - Earth Anchor (mirrors addEarthAnchorNode)
@@ -493,6 +514,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     // Fires the moment the user grants location permission.
     // Immediately restarts ARKit with .gravityAndHeading so GARSession
     // gets compass-fused frames without requiring an app restart.
+    @available(iOS 14.0, *)
     public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
