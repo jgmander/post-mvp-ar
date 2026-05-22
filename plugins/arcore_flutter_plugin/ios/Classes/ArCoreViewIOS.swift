@@ -241,14 +241,21 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     }
 
     private func getAPIKey() -> String {
-        // Try to read from GoogleService-Info.plist first
+        // PRIORITY 1: MAPS_API_KEY from Info.plist — the same unrestricted key Android
+        // uses via AndroidManifest meta-data "com.google.ar.core.API_KEY".
+        // This key has no API restrictions so GARSession is always authorized.
+        if let key = Bundle.main.infoDictionary?["MAPS_API_KEY"] as? String, !key.isEmpty {
+            print("DEBUG: [Post] Using MAPS_API_KEY from Info.plist for GARSession")
+            return key
+        }
+        // PRIORITY 2: GoogleService-Info.plist Firebase key (requires ARCore in restriction list)
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let dict = NSDictionary(contentsOfFile: path),
            let key = dict["API_KEY"] as? String {
             print("DEBUG: [Post] Using API Key from GoogleService-Info.plist")
             return key
         }
-        // Fallback: hardcoded iOS key
+        // PRIORITY 3: Hardcoded fallback (unrestricted debug key)
         print("DEBUG: [Post] Using Fallback API Key")
         return "AIzaSyDos1-Qi6u61x4im7B161B4Bmh2Tf5dU_8"
     }
