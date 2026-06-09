@@ -14,7 +14,7 @@ frontend/.pub-cache/
 
 # Firebase config (contains API keys)
 **/google-services.json
-**/GoogleService-Info.plist
+
 
 # iOS build artifacts
 frontend/ios/Pods/
