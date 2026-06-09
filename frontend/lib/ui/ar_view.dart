@@ -813,7 +813,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     });
     _debugLog.clear();
     _debugLog.writeln('=== POST BLACK BOX — ${DateTime.now().toIso8601String()} ===');
-    _debugLog.writeln('Device: Pixel 10 Pro XL | Package: com.post.app');
+    _debugLog.writeln('Device: Pixel 10 Pro XL | Package: com.post.spatial');
     _debugLog.writeln('');
 
     _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
