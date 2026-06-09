@@ -13,7 +13,7 @@ frontend/.pub-cache/
 *.mp4
 
 # Firebase config (contains API keys)
-**/google-services.json
+
 
 
 # iOS build artifacts

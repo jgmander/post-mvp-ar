@@ -1,0 +1,90 @@
+{
+  "project_info": {
+    "project_number": "364975840465",
+    "project_id": "dbomar-post-mvp",
+    "storage_bucket": "dbomar-post-mvp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:364975840465:android:da723eef7b18045d3079f0",
+        "android_client_info": {
+          "package_name": "com.post.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "364975840465-09l9o9bn26m39d2ttsdol89gprjbtln8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsfBtbeYdlDlTPusc8YeLfUMIxbTKf8Sw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "364975840465-09l9o9bn26m39d2ttsdol89gprjbtln8.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "364975840465-refrthvrpr2vvfo8pbt06cvfvpm4s2jn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.post.spatial"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:364975840465:android:1c19566a97f10e213079f0",
+        "android_client_info": {
+          "package_name": "com.post.spatial"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "364975840465-gpj7o1qqpkl228gr6c00m3gi8e6an4ab.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.post.spatial",
+            "certificate_hash": "0e1b230b1f62317e0dd9eff33cd0cda14ce9bf66"
+          }
+        },
+        {
+          "client_id": "364975840465-09l9o9bn26m39d2ttsdol89gprjbtln8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsfBtbeYdlDlTPusc8YeLfUMIxbTKf8Sw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "364975840465-09l9o9bn26m39d2ttsdol89gprjbtln8.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "364975840465-refrthvrpr2vvfo8pbt06cvfvpm4s2jn.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.post.spatial"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
