@@ -36,6 +36,12 @@ android {
         }
     }
 
+    // CI/CD Keystore environment variables
+    val ciKeystoreFile = rootProject.file("app/key.jks")
+    val ciKeystorePassword = System.getenv("KEYSTORE_PASSWORD")
+    val ciKeyAlias = System.getenv("KEY_ALIAS")
+    val ciKeyPassword = System.getenv("KEY_PASSWORD")
+
     val mapsApiKey = dartEnvironmentVariables["MAPS_API_KEY"] ?: localProperties.getProperty("MAPS_API_KEY") ?: ""
     val mapId = dartEnvironmentVariables["MAP_ID"] ?: localProperties.getProperty("MAP_ID") ?: ""
 
@@ -62,13 +68,28 @@ android {
         manifestPlaceholders["MAP_ID"] = mapId
     }
 
+    signingConfigs {
+        create("release") {
+            if (ciKeystorePassword != null) {
+                storeFile = ciKeystoreFile
+                storePassword = ciKeystorePassword
+                keyAlias = ciKeyAlias
+                keyPassword = ciKeyPassword
+            } else {
+                // Fallback to debug keystore if building release locally without CI
+                storeFile = signingConfigs.getByName("debug").storeFile
+                storePassword = signingConfigs.getByName("debug").storePassword
+                keyAlias = signingConfigs.getByName("debug").keyAlias
+                keyPassword = signingConfigs.getByName("debug").keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             isShrinkResources = false
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }

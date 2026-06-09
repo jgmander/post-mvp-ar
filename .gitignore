@@ -27,5 +27,6 @@ frontend/ios/.symlinks/
 *.pem
 .env
 .secrets/
+.agent/secrets/
 __pycache__/
 .venv*/
