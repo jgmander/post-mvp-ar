@@ -811,7 +811,6 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Digital Imprint'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -830,7 +829,16 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
               ],
             ],
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close'))],
+          actions: [
+            IconButton(
+              icon: Icon(Icons.send, color: Colors.cyanAccent),
+              onPressed: () {
+                String place = post.placeName != null && post.placeName != 'Unknown Location' ? post.placeName! : 'this spot';
+                Share.share('Check out this Post I found at $place: ${post.messageContent}');
+              },
+            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close'))
+          ],
         ),
       ).then((_) => _isDialogShowing = false);
     } catch (_) {}
@@ -1089,24 +1097,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                     animation: _reticleGlowAnimation,
                     builder: (context, child) {
                       final isLocked = _isAuraTargetingBuilding && hasVPS;
-                      return Container(
-                        width: isLocked ? 90 : 70,
-                        height: isLocked ? 90 : 70,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isLocked
-                              ? Colors.cyanAccent.withOpacity(0.9)
-                              : Colors.white.withOpacity(_reticleGlowAnimation.value),
-                            width: isLocked ? 3 : 1.5,
-                          ),
-                          boxShadow: isLocked ? [
-                            BoxShadow(color: Colors.cyanAccent.withOpacity(0.5), blurRadius: 25, spreadRadius: 8),
-                          ] : [],
-                        ),
-                        child: isLocked
-                          ? Center(child: Icon(Icons.push_pin_rounded, color: Colors.cyanAccent, size: 32))
-                          : null,
+                      return Icon(
+                        Icons.location_pin,
+                        color: isLocked ? Colors.cyanAccent : Colors.white70,
+                        size: isLocked ? 48 : 36,
+                        shadows: isLocked ? [
+                          Shadow(color: Colors.cyanAccent.withOpacity(0.5), blurRadius: 20),
+                        ] : [],
                       );
                     },
                   ),
@@ -1286,26 +1283,12 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                       _isHolding
                         ? 'Hold to charge... ${(_holdProgress * 100).toInt()}%'
                         : hasVPS
-                          ? 'Tap the button or long-press to pin'
+                          ? 'Long-press anywhere to drop a Pin'
                           : 'Scanning for VPS lock...',
                       style: TextStyle(color: Colors.white70, fontSize: 13),
                     ),
                   ),
-                  SizedBox(height: 12),
-                  // Big Pin FAB
-                  if (hasVPS)
-                    FloatingActionButton.extended(
-                      onPressed: () {
-                        HapticFeedback.heavyImpact();
-                        _dropGhostPin();
-                      },
-                      label: Text('Pin Here', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      icon: Icon(Icons.push_pin_rounded, size: 24),
-                      backgroundColor: Colors.cyanAccent,
-                      foregroundColor: Colors.black,
-                      elevation: 8,
-                    ),
-                  ],
+                ],
                 ),
               ), // end Positioned
             ], // end Stack children
