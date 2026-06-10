@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
-import 'package:vector_math/vector_math_64.dart' as vector;
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/api_service.dart';
@@ -11,10 +10,9 @@ import 'ar_onboarding_overlay.dart';
 import '../services/auth_service.dart';
 import '../screens/admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async';
 
 class ArView extends StatefulWidget {
-  const ArView({Key? key}) : super(key: key);
+  const ArView({super.key});
 
   @override
   _ArViewState createState() => _ArViewState();
@@ -26,7 +24,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   List<Post> nearbyPosts = [];
   bool _arCoreInitialized = false;
   bool _postsRendered = false;
-  Set<String> _renderedPostIds = {};
+  final Set<String> _renderedPostIds = {};
   Timer? _vpsTimer;
   int _vpsScanSeconds = 0;
   Timer? _holdHapticTimer;
@@ -951,7 +949,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
           Positioned.fill(
             child: ValueListenableBuilder<int>(
               valueListenable: _overlayTrigger,
-              builder: (context, _, __) {
+              builder: (context, _, _) {
                 final hasVPS = _currentPose != null && (_currentPose!['accuracy'] ?? 999.0) < 3.0;
 
                 return GestureDetector(

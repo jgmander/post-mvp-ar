@@ -4,6 +4,8 @@ import '../models/post.dart';
 import '../services/api_service.dart';
 
 class CreatePostView extends StatefulWidget {
+  const CreatePostView({super.key});
+
   @override
   _CreatePostViewState createState() => _CreatePostViewState();
 }
@@ -76,7 +78,7 @@ class _CreatePostViewState extends State<CreatePostView> {
             ),
             SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _visibilityType,
+              initialValue: _visibilityType,
               items: ['1-to-1', '1-to-many'].map((String value) {
                 return DropdownMenuItem<String>(
                   value: value,
@@ -96,8 +98,8 @@ class _CreatePostViewState extends State<CreatePostView> {
               ? CircularProgressIndicator()
               : ElevatedButton(
                   onPressed: _submitPost,
-                  child: Text('Drop Post Here'),
                   style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(50)),
+                  child: Text('Drop Post Here'),
                 )
           ],
         ),

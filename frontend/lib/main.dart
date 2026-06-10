@@ -32,6 +32,8 @@ void main() async {
 }
 
 class PostApp extends StatelessWidget {
+  const PostApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

@@ -52,6 +52,8 @@ dependencies:
   sign_in_with_apple: ^8.0.0
   crypto: ^3.0.7
 
+  google_maps_flutter_platform_interface: any
+  firebase_core: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

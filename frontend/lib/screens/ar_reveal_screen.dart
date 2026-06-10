@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 class ArRevealScreen extends StatefulWidget {
   final Map<String, dynamic> propertyData;
 
-  ArRevealScreen({required this.propertyData});
+  const ArRevealScreen({super.key, required this.propertyData});
 
   @override
   _ArRevealScreenState createState() => _ArRevealScreenState();
@@ -46,7 +46,7 @@ class _ArRevealScreenState extends State<ArRevealScreen> {
         'lng': lng,
         'assetPath': assetPath,
       });
-    } on PlatformException catch (e) {
+    } on PlatformException {
       print("Failed to invoke anchorModel: '\${e.message}'.");
     }
   }

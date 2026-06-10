@@ -55,13 +55,13 @@ class ArOnboardingOverlay extends StatefulWidget {
   final VioFailureReason failureReason;
 
   const ArOnboardingOverlay({
-    Key? key,
+    super.key,
     required this.targetLat,
     required this.targetLng,
     required this.propertyName,
     required this.isTracking,
     this.failureReason = VioFailureReason.none,
-  }) : super(key: key);
+  });
 
   @override
   State<ArOnboardingOverlay> createState() => _ArOnboardingOverlayState();

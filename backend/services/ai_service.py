@@ -8,8 +8,8 @@ LOCATION = "us-central1"
 
 try:
     aiplatform.init(project=PROJECT_ID, location=LOCATION)
-    # Using gemini-1.5-flash for speed and cost efficiency
-    model = GenerativeModel("gemini-1.5-flash-001")
+    # Using gemini-2.5-flash for speed and cost efficiency
+    model = GenerativeModel("gemini-2.5-flash")
 except Exception as e:
     print(f"Failed to initialize AI Platform: {e}")
     model = None

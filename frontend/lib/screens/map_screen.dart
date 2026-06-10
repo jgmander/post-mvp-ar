@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -16,7 +15,6 @@ import 'admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_collision_sheet.dart';
-import 'dart:async';
 
 // ─── Brand Design Tokens ────────────────────────────────────────────────────
 class _PostColors {
@@ -85,6 +83,8 @@ class _RadarPainter extends CustomPainter {
 }
 
 class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
+
   @override
   _MapScreenState createState() => _MapScreenState();
 }
@@ -265,7 +265,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         .listen((snapshot) async {
       try {
         final posts = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           data['id'] = doc.id;
           return Post.fromJson(data);
         }).toList();
@@ -595,7 +595,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                   Navigator.pop(context);
                                   Navigator.push(context, PageRouteBuilder(
                                     opaque: false,
-                                    pageBuilder: (_, __, ___) => const ArView(),
+                                    pageBuilder: (_, _, _) => const ArView(),
                                   ));
                                 },
                                 child: Container(
@@ -829,7 +829,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     const SizedBox.shrink(),
                   // Post Reason Dropdown
                   DropdownButtonFormField<String>(
-                    value: selectedIdea,
+                    initialValue: selectedIdea,
                     decoration: InputDecoration(
                       hintText: 'Select an idea...',
                       hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14, fontWeight: FontWeight.w700),
@@ -966,7 +966,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         Navigator.pop(context);
                         Navigator.push(context, PageRouteBuilder(
                           opaque: false,
-                          pageBuilder: (_, __, ___) => const ArView(),
+                          pageBuilder: (_, _, _) => const ArView(),
                         ));
                       },
                       child: Container(
@@ -1295,9 +1295,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           expiresAt = DateTime.tryParse(data['expires_at']);
                         }
                         
-                        if (expiresAt == null) {
-                          expiresAt = DateTime.now().add(const Duration(hours: 24));
-                        }
+                        expiresAt ??= DateTime.now().add(const Duration(hours: 24));
                         
                         String countdown = 'Unknown';
                         final diff = expiresAt.difference(DateTime.now());
@@ -1576,7 +1574,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 HapticFeedback.heavyImpact();
                 Navigator.push(context, PageRouteBuilder(
                   opaque: false,
-                  pageBuilder: (_, __, ___) => const ArView(),
+                  pageBuilder: (_, _, _) => const ArView(),
                 ));
               },
               child: const Icon(
@@ -1628,7 +1626,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       // Radar
                       AnimatedBuilder(
                         animation: _radarCtrl,
-                        builder: (_, __) => SizedBox(
+                        builder: (_, _) => SizedBox(
                           width: 140,
                           height: 140,
                           child: CustomPaint(
@@ -1658,7 +1656,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           borderRadius: BorderRadius.circular(2),
                           child: AnimatedBuilder(
                             animation: _radarCtrl,
-                            builder: (_, __) => LinearProgressIndicator(
+                            builder: (_, _) => LinearProgressIndicator(
                               value: null,
                               minHeight: 2,
                               backgroundColor: _PostColors.divider,

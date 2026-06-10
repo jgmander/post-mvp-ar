@@ -6,6 +6,8 @@ import '../services/api_service.dart';
 import 'ar_view.dart';
 
 class ProgressiveView extends StatefulWidget {
+  const ProgressiveView({super.key});
+
   @override
   _ProgressiveViewState createState() => _ProgressiveViewState();
 }
@@ -111,7 +113,7 @@ class _ProgressiveViewState extends State<ProgressiveView> {
       context,
       PageRouteBuilder(
         opaque: false,
-        pageBuilder: (_, __, ___) => ArView(),
+        pageBuilder: (_, _, _) => ArView(),
       ),
     );
   }
