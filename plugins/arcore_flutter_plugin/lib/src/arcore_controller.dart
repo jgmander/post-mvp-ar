@@ -18,6 +18,7 @@ typedef ArCorePlaneHandler = void Function(ArCorePlane plane);
 typedef ArCoreAugmentedImageTrackingHandler = void Function(
     ArCoreAugmentedImage);
 typedef RooftopAnchorResolvedHandler = void Function(String name, bool success, String? state);
+typedef TerrainAnchorResolvedHandler = void Function(String name, bool success, String? state);
 
 const UTILS_CHANNEL_NAME = 'arcore_flutter_plugin/utils';
 
@@ -60,6 +61,7 @@ class ArCoreController {
   ArCoreHitResultHandler? onPlaneTap;
   ArCorePlaneHandler? onPlaneDetected;
   RooftopAnchorResolvedHandler? onRooftopAnchorResolved;
+  TerrainAnchorResolvedHandler? onTerrainAnchorResolved;
   BoolResultHandler? onCenterHitBuilding;
   Function(Map<String, dynamic>)? onCompatibilityError;
   String trackingState = '';
@@ -105,6 +107,16 @@ class ArCoreController {
         if (onRooftopAnchorResolved != null) {
           final args = call.arguments as Map<dynamic, dynamic>;
           onRooftopAnchorResolved!(
+            args['name'] as String,
+            args['success'] as bool,
+            args['state'] as String?,
+          );
+        }
+        break;
+      case 'onTerrainAnchorResolved':
+        if (onTerrainAnchorResolved != null) {
+          final args = call.arguments as Map<dynamic, dynamic>;
+          onTerrainAnchorResolved!(
             args['name'] as String,
             args['success'] as bool,
             args['state'] as String?,
@@ -246,6 +258,18 @@ class ArCoreController {
     }
     _addListeners(node);
     return _channel.invokeMethod('resolveAnchorOnRooftopAsync', params);
+  }
+
+  Future<void> resolveAnchorOnTerrainAsync(ArCoreNode node, double latitude, double longitude, double altitude,
+      {String? parentNodeName}) {
+    final params = _addParentNodeNameToParams(node.toMap(), parentNodeName);
+    if (params != null) {
+      params['latitude'] = latitude;
+      params['longitude'] = longitude;
+      params['altitude'] = altitude; // Above terrain
+    }
+    _addListeners(node);
+    return _channel.invokeMethod('resolveAnchorOnTerrainAsync', params);
   }
 
   Future<void> removeNode({@required String? nodeName}) {

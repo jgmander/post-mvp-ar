@@ -17,6 +17,7 @@ class Post {
   final bool isFlagged;
   final String? placeName;
   final String? placeCategory;
+  final String postType;
   final DateTime? expiresAt;
 
   Post({
@@ -36,6 +37,7 @@ class Post {
     this.isFlagged = false,
     this.placeName,
     this.placeCategory,
+    this.postType = 'pin',
     this.expiresAt,
   });
 
@@ -69,6 +71,7 @@ class Post {
       isFlagged: json['is_flagged'] ?? false,
       placeName: json['place_name'],
       placeCategory: json['place_category'],
+      postType: json['post_type'] ?? 'pin',
       expiresAt: parsedExpiresAt,
     );
   }
@@ -86,6 +89,7 @@ class Post {
       'is_flagged': isFlagged,
       'place_name': placeName,
       'place_category': placeCategory,
+      'post_type': postType,
       'expires_at': expiresAt?.toIso8601String(),
     };
   }

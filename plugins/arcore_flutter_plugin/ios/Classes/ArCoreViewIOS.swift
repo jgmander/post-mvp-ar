@@ -302,6 +302,10 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             if let map = call.arguments as? [String: Any] {
                 resolveAnchorOnRooftopAsync(map: map, result: result)
             }
+        case "resolveAnchorOnTerrainAsync":
+            if let map = call.arguments as? [String: Any] {
+                resolveAnchorOnTerrainAsync(map: map, result: result)
+            }
         case "getTrackingState":
             let state = arView?.session.currentFrame?.camera.trackingState
             let stateStr: String
@@ -719,6 +723,51 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     private func debugLog(_ message: String) {
         if isDebug {
             print("[ArCoreIOS] \(message)")
+        }
+    }
+
+    // MARK: - Terrain Anchor
+
+    private func resolveAnchorOnTerrainAsync(map: [String: Any], result: @escaping FlutterResult) {
+        guard let garSession = garSession else {
+            result(FlutterError(code: "UNAVAILABLE", message: "GARSession not initialized", details: nil))
+            return
+        }
+
+        let lat = (map["latitude"] as? NSNumber)?.doubleValue ?? 0.0
+        let lng = (map["longitude"] as? NSNumber)?.doubleValue ?? 0.0
+        let alt = (map["altitude"] as? NSNumber)?.doubleValue ?? 0.0
+        let name = map["name"] as? String ?? "terrain_\(Int.random(in: 1000...9999))"
+
+        do {
+            let terrainAnchor = try garSession.createAnchorOnTerrain(
+                coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
+                altitudeAboveTerrain: alt,
+                eastUpSouthQAnchor: simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
+            ) { anchor, state in
+                DispatchQueue.main.async {
+                    if let anchor = anchor {
+                        let sphere = self.createSphereNode(name: name, map: map)
+                        sphere.simdTransform = anchor.transform
+                        self.arView?.scene.rootNode.addChildNode(sphere)
+                        self.nodeMap[name] = sphere
+                        self.methodChannel.invokeMethod("onTerrainAnchorResolved", arguments: [
+                            "name": name,
+                            "success": true,
+                            "state": "SUCCESS"
+                        ])
+                    } else {
+                        self.methodChannel.invokeMethod("onTerrainAnchorResolved", arguments: [
+                            "name": name,
+                            "success": false,
+                            "state": "ERROR"
+                        ])
+                    }
+                }
+            }
+            result(nil)
+        } catch {
+            result(FlutterError(code: "ANCHOR_ERROR", message: error.localizedDescription, details: nil))
         }
     }
 }

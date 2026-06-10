@@ -279,6 +279,11 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                 val map = call.arguments as HashMap<String, Any>
                 resolveAnchorOnRooftopAsync(map, result)
             }
+            "resolveAnchorOnTerrainAsync" -> {
+                debugLog(" resolveAnchorOnTerrainAsync")
+                val map = call.arguments as HashMap<String, Any>
+                resolveAnchorOnTerrainAsync(map, result)
+            }
             else -> {
             }
         }
@@ -638,6 +643,51 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                 result.success(null)
             } catch (e: Exception) {
                 result.error("RooftopAnchor Exception", e.localizedMessage, null)
+            }
+        }
+    }
+
+    private fun resolveAnchorOnTerrainAsync(map: HashMap<String, Any>, result: MethodChannel.Result) {
+        if (arSceneView == null) return
+        val earth = arSceneView?.session?.earth
+        if (earth?.trackingState != TrackingState.TRACKING) {
+            result.error("UNAVAILABLE", "Earth not tracking", null)
+            return
+        }
+
+        val flutterArCoreNode = FlutterArCoreNode(map)
+        val lat = (map["latitude"] as? Number)?.toDouble() ?: 0.0
+        val lng = (map["longitude"] as? Number)?.toDouble() ?: 0.0
+        val altAboveTerrain = (map["altitude"] as? Number)?.toDouble() ?: 0.0
+
+        RenderableCustomFactory.makeRenderable(activity.applicationContext, flutterArCoreNode) { renderable, t ->
+            if (t != null) {
+                result.error("Make Renderable Error", t.localizedMessage, null)
+                return@makeRenderable
+            }
+
+            try {
+                earth.resolveAnchorOnTerrainAsync(
+                    lat, lng, altAboveTerrain, 0f, 0f, 0f, 1f
+                ) { anchor, state ->
+                    if (state.name == "SUCCESS" && anchor != null) {
+                        activity.runOnUiThread {
+                            val anchorNode = AnchorNode(anchor)
+                            anchorNode.setParent(arSceneView?.scene)
+                            anchorNode.name = flutterArCoreNode.name
+                            anchorNode.renderable = renderable
+                            attachNodeToParent(anchorNode, flutterArCoreNode.parentNodeName)
+                            methodChannel.invokeMethod("onTerrainAnchorResolved", mapOf("name" to flutterArCoreNode.name, "success" to true, "state" to state.name))
+                        }
+                    } else {
+                        activity.runOnUiThread {
+                            methodChannel.invokeMethod("onTerrainAnchorResolved", mapOf("name" to flutterArCoreNode.name, "success" to false, "state" to state.name))
+                        }
+                    }
+                }
+                result.success(null)
+            } catch (e: Exception) {
+                result.error("TerrainAnchor Exception", e.localizedMessage, null)
             }
         }
     }

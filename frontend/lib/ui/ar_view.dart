@@ -173,6 +173,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
     arCoreController.onNodeTap = (name) => _handleOnNodeTap(name);
     arCoreController.onPlaneTap = _handleOnPlaneTap;
     arCoreController.onRooftopAnchorResolved = _handleRooftopAnchorResolved;
+    arCoreController.onTerrainAnchorResolved = _handleTerrainAnchorResolved;
     arCoreController.onCenterHitBuilding = _handleCenterHitBuilding;
     arCoreController.onCompatibilityError = _handleCompatibilityError;
     _arCoreInitialized = true;
@@ -333,6 +334,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
   void _showGhostPinSheet(double lat, double lng, String placeName, String placeCategory) {
     final contentController = TextEditingController();
     bool isSubmitting = false;
+    String selectedPostType = 'pin';
 
     // Contextual quick-message presets based on the surface type
     final List<String> quickMessages = ["Leave a note", "Hidden Gem", "Checkout this spot", "Meet me here", "Custom..."];
@@ -416,6 +418,35 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                   ),
                   SizedBox(height: 16),
 
+                  // Post Type Selection
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ChoiceChip(
+                        label: Text('📍 Ground Pin'),
+                        selected: selectedPostType == 'pin',
+                        onSelected: (val) {
+                          if (val) setModalState(() => selectedPostType = 'pin');
+                        },
+                        selectedColor: Colors.cyanAccent,
+                        backgroundColor: Colors.black45,
+                        labelStyle: TextStyle(color: selectedPostType == 'pin' ? Colors.black : Colors.white),
+                      ),
+                      SizedBox(width: 16),
+                      ChoiceChip(
+                        label: Text('🎈 Sky Balloon'),
+                        selected: selectedPostType == 'balloon',
+                        onSelected: (val) {
+                          if (val) setModalState(() => selectedPostType = 'balloon');
+                        },
+                        selectedColor: Colors.cyanAccent,
+                        backgroundColor: Colors.black45,
+                        labelStyle: TextStyle(color: selectedPostType == 'balloon' ? Colors.black : Colors.white),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+
                   // Custom message input / Caption
                   TextField(
                     controller: contentController,
@@ -449,8 +480,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
                             try {
                               final alt = _currentPose!['altitude'] as double;
+                              final postAlt = selectedPostType == 'balloon' ? alt + 15.0 : alt;
                               final newPost = Post(
-                                latitude: lat, longitude: lng, altitude: alt,
+                                latitude: lat, longitude: lng, altitude: postAlt,
                                 messageContent: contentController.text,
                                 creatorId: AuthService().currentUser?.uid ?? 'anonymous',
                                 ownerId: AuthService().currentUser?.uid,
@@ -458,6 +490,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                                 reach: 50,
                                 placeName: placeName,
                                 placeCategory: placeCategory,
+                                postType: selectedPostType,
                                 expiresAt: DateTime.now().add(const Duration(hours: 24)),
                               );
 
@@ -473,7 +506,11 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
                                   shape: sphere,
                                 );
 
-                                await arCoreController.resolveAnchorOnRooftopAsync(node, lat, lng, 0.5);
+                                if (selectedPostType == 'pin') {
+                                  await arCoreController.resolveAnchorOnTerrainAsync(node, lat, lng, 0.0);
+                                } else {
+                                  await arCoreController.addEarthAnchorNode(node, lat, lng, postAlt);
+                                }
 
                                 // THE THUD
                                 HapticFeedback.heavyImpact();
@@ -735,6 +772,26 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
   // ─── Existing handlers ─────────────────────────────────────────
 
+  void _handleTerrainAnchorResolved(String name, bool success, String? state) {
+    if (success) {
+      print('Terrain Anchor Lock Achieved for Post: $name');
+    } else {
+      print('Terrain Anchor FAILED for Post: $name | State: $state');
+      // If it fails, fallback to Earth Anchor using original GPS alt
+      final post = nearbyPosts.firstWhere((p) {
+        String pId = p.id ?? "temp_${nearbyPosts.indexOf(p)}";
+        return pId == name;
+      }, orElse: () => Post(latitude: 0, longitude: 0, altitude: 0, messageContent: '', creatorId: '', visibilityType: ''));
+      
+      if (post.latitude != 0) {
+        final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
+        final sphere = ArCoreSphere(materials: [material], radius: 0.2);
+        final fallbackNode = ArCoreNode(name: name, shape: sphere);
+        arCoreController.addEarthAnchorNode(fallbackNode, post.latitude, post.longitude, post.altitude);
+      }
+    }
+  }
+
   void _handleRooftopAnchorResolved(String name, bool success, String? state) {
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✨ Precision Rooftop Anchor Locked!')));
@@ -794,7 +851,12 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
       final sphere = ArCoreSphere(materials: [material], radius: 0.2);
       final node = ArCoreNode(name: postId, shape: sphere);
-      arCoreController.addEarthAnchorNode(node, post.latitude, post.longitude, post.altitude ?? 0.0);
+      
+      if (post.postType == 'pin') {
+        arCoreController.resolveAnchorOnTerrainAsync(node, post.latitude, post.longitude, 0.0);
+      } else {
+        arCoreController.addEarthAnchorNode(node, post.latitude, post.longitude, post.altitude);
+      }
       index++;
     }
   }
