@@ -856,8 +856,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       String postId = post.id ?? "temp_$index";
       if (_renderedPostIds.contains(postId)) { index++; continue; }
       _renderedPostIds.add(postId);
-      final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
-      final sphere = ArCoreSphere(materials: [material], radius: 0.2);
+      final material = ArCoreMaterial(color: Colors.blueAccent.withValues(alpha: 0.8));
+      final radius = post.postType == 'balloon' ? 2.5 : 0.6;
+      final sphere = ArCoreSphere(materials: [material], radius: radius);
       final node = ArCoreNode(name: postId, shape: sphere);
       
       if (post.postType == 'pin') {
