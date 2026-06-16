@@ -1,5 +1,5 @@
 import os
-import geohash2
+import geohash
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from google.cloud import firestore
 from models.post import PostCreate, PostResponse
@@ -28,7 +28,7 @@ def create_post(post_data: dict) -> dict:
     # Encode geohash at high precision for the stored document
     lat = post_data.get("latitude", 0.0)
     lng = post_data.get("longitude", 0.0)
-    post_data["geohash"] = geohash2.encode(lat, lng, precision=GEOHASH_STORE_PRECISION)
+    post_data["geohash"] = geohash.encode(lat, lng, precision=GEOHASH_STORE_PRECISION)
 
     doc_ref = db.collection(COLLECTION_NAME).document()
 
@@ -56,9 +56,9 @@ def get_nearby_posts(lat: float, lng: float, radius_km: float = 1.0) -> list:
     if not db:
         raise Exception("Firestore client not initialized")
 
-    center_hash = geohash2.encode(lat, lng, precision=GEOHASH_QUERY_PRECISION)
-    neighbors = geohash2.neighbors(center_hash)
-    hashes_to_query = [center_hash] + list(neighbors.values())
+    center_hash = geohash.encode(lat, lng, precision=GEOHASH_QUERY_PRECISION)
+    neighbors = geohash.neighbors(center_hash)
+    hashes_to_query = [center_hash] + neighbors  # neighbors() returns a list of 8 strings
 
     def query_tile(tile_hash: str) -> list:
         """Query all non-flagged posts in a single GeoHash tile."""
