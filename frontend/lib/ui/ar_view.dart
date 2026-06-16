@@ -10,6 +10,7 @@ import 'ar_onboarding_overlay.dart';
 import '../services/auth_service.dart';
 import '../screens/admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/moderation_service.dart';
 
 class ArView extends StatefulWidget {
   const ArView({super.key});
@@ -905,48 +906,116 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
   }
 
   void _handleOnNodeTap(String name) {
-    if (_isDialogShowing) return; // Prevent stacked dialogs from multi-node taps
+    if (_isDialogShowing) return;
     try {
       final post = nearbyPosts.firstWhere((p) {
         int index = nearbyPosts.indexOf(p);
         return (p.id ?? "temp_$index") == name;
       });
+      final postId = post.id ?? name;
       _isDialogShowing = true;
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF161B25),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(post.messageContent, style: TextStyle(fontSize: 18)),
+              Text(
+                post.messageContent,
+                style: const TextStyle(color: Color(0xFFF0F4FF), fontSize: 18),
+              ),
               if (post.ctaText != null && post.ctaText!.isNotEmpty) ...[
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action: ${post.ctaText}')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Action: ${post.ctaText}')));
                   },
-                  style: ElevatedButton.styleFrom(minimumSize: Size.fromHeight(40)),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(40)),
                   child: Text(post.ctaText!),
                 ),
               ],
             ],
           ),
           actions: [
+            // Share
             IconButton(
-              icon: Icon(Icons.send, color: Colors.cyanAccent),
+              icon: const Icon(Icons.send, color: Colors.cyanAccent),
+              tooltip: 'Share',
               onPressed: () {
-                String place = post.placeName != null && post.placeName != 'Unknown Location' ? post.placeName! : 'this spot';
+                String place = post.placeName != null && post.placeName != 'Unknown Location'
+                    ? post.placeName! : 'this spot';
                 Share.share('Check out this Post I found at $place: ${post.messageContent}');
               },
             ),
-            TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Close'))
+            // Hide this post
+            IconButton(
+              icon: const Icon(Icons.visibility_off_outlined, color: Color(0xFF8896B0)),
+              tooltip: 'Hide post',
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await ModerationService().hidePost(postId);
+                if (mounted) {
+                  setState(() => nearbyPosts.removeWhere(
+                    (p) => (p.id ?? '') == postId));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Post hidden.')));
+                }
+              },
+            ),
+            // Report this post
+            IconButton(
+              icon: const Icon(Icons.flag_outlined, color: Color(0xFFFF5252)),
+              tooltip: 'Report post',
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    backgroundColor: const Color(0xFF161B25),
+                    title: const Text('Report post?',
+                      style: TextStyle(color: Color(0xFFF0F4FF))),
+                    content: const Text(
+                      'This post will be flagged for review. Thank you for keeping Post safe.',
+                      style: TextStyle(color: Color(0xFF8896B0))),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(c, false),
+                        child: const Text('Cancel',
+                          style: TextStyle(color: Color(0xFF8896B0)))),
+                      TextButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        child: const Text('Report',
+                          style: TextStyle(color: Color(0xFFFF5252)))),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await ModerationService().reportPost(postId);
+                  await ModerationService().hidePost(postId);
+                  if (mounted) {
+                    setState(() => nearbyPosts.removeWhere(
+                      (p) => (p.id ?? '') == postId));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Post reported. Thank you.')));
+                  }
+                }
+              },
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close', style: TextStyle(color: Color(0xFF4F8EF7))),
+            ),
           ],
         ),
       ).then((_) => _isDialogShowing = false);
     } catch (_) {}
   }
+
 
   void _handleOnPlaneTap(List<ArCoreHitTestResult> hits) async {
     // Tap-based creation is now replaced by the Ghost-Pin long-press.

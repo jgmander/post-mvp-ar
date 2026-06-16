@@ -13,6 +13,7 @@ import '../models/post.dart';
 import '../ui/ar_view.dart';
 import 'admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/moderation_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../widgets/auth_collision_sheet.dart';
 
@@ -622,6 +623,70 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 ),
                               ),
                             ),
+                             // ── Report / Hide ──────────────────────
+                             Padding(
+                               padding: const EdgeInsets.only(bottom: 12),
+                               child: Row(
+                                 mainAxisAlignment: MainAxisAlignment.center,
+                                 children: [
+                                   TextButton.icon(
+                                     onPressed: () async {
+                                       final postId = p.id ?? '';
+                                       if (postId.isEmpty) return;
+                                       await ModerationService().hidePost(postId);
+                                       if (context.mounted) {
+                                         Navigator.pop(context);
+                                         ScaffoldMessenger.of(context).showSnackBar(
+                                           const SnackBar(content: Text('Post hidden.')));
+                                       }
+                                     },
+                                     icon: const Icon(Icons.visibility_off_outlined,
+                                       size: 16, color: Color(0xFF4A607A)),
+                                     label: const Text('Hide',
+                                       style: TextStyle(color: Color(0xFF4A607A), fontSize: 12)),
+                                   ),
+                                   const SizedBox(width: 16),
+                                   TextButton.icon(
+                                     onPressed: () async {
+                                       final postId = p.id ?? '';
+                                       if (postId.isEmpty) return;
+                                       final confirmed = await showDialog<bool>(
+                                         context: context,
+                                         builder: (c) => AlertDialog(
+                                           backgroundColor: const Color(0xFF161B25),
+                                           title: const Text('Report post?',
+                                             style: TextStyle(color: Color(0xFFF0F4FF))),
+                                           content: const Text(
+                                             'This post will be flagged for review.',
+                                             style: TextStyle(color: Color(0xFF8896B0))),
+                                           actions: [
+                                             TextButton(
+                                               onPressed: () => Navigator.pop(c, false),
+                                               child: const Text('Cancel',
+                                                 style: TextStyle(color: Color(0xFF8896B0)))),
+                                             TextButton(
+                                               onPressed: () => Navigator.pop(c, true),
+                                               child: const Text('Report',
+                                                 style: TextStyle(color: Color(0xFFFF5252)))),
+                                           ],
+                                         ),
+                                       );
+                                       if (confirmed == true && context.mounted) {
+                                         await ModerationService().reportPost(postId);
+                                         await ModerationService().hidePost(postId);
+                                         Navigator.pop(context);
+                                         ScaffoldMessenger.of(context).showSnackBar(
+                                           const SnackBar(content: Text('Post reported. Thank you.')));
+                                       }
+                                     },
+                                     icon: const Icon(Icons.flag_outlined,
+                                       size: 16, color: Color(0xFFFF5252)),
+                                     label: const Text('Report',
+                                       style: TextStyle(color: Color(0xFFFF5252), fontSize: 12)),
+                                   ),
+                                 ],
+                               ),
+                             ),
                           ],
                         ),
                       ),
