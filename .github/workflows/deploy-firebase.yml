@@ -41,3 +41,13 @@ jobs:
 
       - name: Deploy Hosting (get-post.co / postspatial.web.app)
         run: firebase deploy --only hosting --project ${{ env.PROJECT_ID }}
+
+      - name: Stamp deploy timestamp to sprint doc
+        if: success()
+        run: |
+          echo "Last Firebase deploy: $(date -u '+%Y-%m-%d %H:%M UTC') — commit ${{ github.sha }} ✅" >> .agent/current_sprint.md
+          git config user.email "ci@post.co"
+          git config user.name "GitHub Actions"
+          git add .agent/current_sprint.md
+          git commit -m "ci: stamp firebase deploy timestamp [skip ci]" || true
+          git push || true

@@ -56,3 +56,13 @@ jobs:
           image: gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           # Allow unauthenticated access for MVP
           flags: --allow-unauthenticated
+
+      - name: Stamp deploy timestamp to sprint doc
+        if: success()
+        run: |
+          echo "Last Backend deploy: $(date -u '+%Y-%m-%d %H:%M UTC') — commit ${{ github.sha }} ✅" >> .agent/current_sprint.md
+          git config user.email "ci@post.co"
+          git config user.name "GitHub Actions"
+          git add .agent/current_sprint.md
+          git commit -m "ci: stamp backend deploy timestamp [skip ci]" || true
+          git push || true

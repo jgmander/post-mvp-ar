@@ -97,3 +97,14 @@ jobs:
       - name: Clean up Keystore
         if: always()
         run: rm -f android/app/key.jks
+
+      - name: Stamp deploy timestamp to sprint doc
+        if: success()
+        run: |
+          cd ${{ github.workspace }}
+          echo "Last Android deploy: $(date -u '+%Y-%m-%d %H:%M UTC') — commit ${{ github.sha }} ✅" >> .agent/current_sprint.md
+          git config user.email "ci@post.co"
+          git config user.name "GitHub Actions"
+          git add .agent/current_sprint.md
+          git commit -m "ci: stamp android deploy timestamp [skip ci]" || true
+          git push || true
