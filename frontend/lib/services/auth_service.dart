@@ -208,18 +208,36 @@ class AuthService {
     }
   }
 
-  Future<void> upgradeWithEmail(String email, String password) async {
-    // Scaffold for upgrade path
-    print("Scaffold: Upgrade account with $email");
-    if (_auth.currentUser != null) {
-      await FirebaseFirestore.instance.collection('users').doc(_auth.currentUser!.uid).set({
+  /// Sign in (or link) with email + password.
+  /// Used by the Play Store reviewer account and future email-auth users.
+  Future<void> signInWithEmailPassword(String email, String password) async {
+    final credential = EmailAuthProvider.credential(email: email, password: password);
+    try {
+      if (_auth.currentUser != null && _auth.currentUser!.isAnonymous) {
+        // Promote anonymous session → named account
+        await _auth.currentUser!.linkWithCredential(credential);
+        print('Linked anonymous session to email account: $email');
+      } else {
+        await _auth.signInWithEmailAndPassword(email: email, password: password);
+        print('Signed in with email: $email');
+      }
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_auth.currentUser!.uid)
+          .set({
         'uid': _auth.currentUser!.uid,
         'email': email,
         'role': 'user',
         'tier': 'free',
         'createdAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      print("User profile generated in Firestore");
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'credential-already-in-use' || e.code == 'email-already-in-use') {
+        // Email already has an account — just sign in directly
+        await _auth.signInWithEmailAndPassword(email: email, password: password);
+      } else {
+        rethrow;
+      }
     }
   }
 

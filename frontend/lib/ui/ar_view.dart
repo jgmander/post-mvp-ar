@@ -776,12 +776,103 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                   child: Text('v1.0.0', style: TextStyle(color: Color(0xFF252D3F), fontSize: 12)),
                 ),
               ),
+              // ── Email / Password (for Play Store reviewer + future email auth) ──
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Row(children: [
+                  Expanded(child: Divider(color: Color(0xFF252D3F))),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('or', style: TextStyle(color: Color(0xFF4A607A), fontSize: 12)),
+                  ),
+                  Expanded(child: Divider(color: Color(0xFF252D3F))),
+                ]),
+              ),
+              StatefulBuilder(
+                builder: (ctx, setLocalState) {
+                  final emailCtrl = TextEditingController();
+                  final passCtrl  = TextEditingController();
+                  String? emailError;
+                  bool loading = false;
+                  return StatefulBuilder(
+                    builder: (ctx2, setInner) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextField(
+                          controller: emailCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          style: const TextStyle(color: Color(0xFFF0F4FF), fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Email',
+                            hintStyle: const TextStyle(color: Color(0xFF4A607A)),
+                            filled: true,
+                            fillColor: const Color(0xFF141F35),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: passCtrl,
+                          obscureText: true,
+                          style: const TextStyle(color: Color(0xFFF0F4FF), fontSize: 14),
+                          decoration: InputDecoration(
+                            hintText: 'Password',
+                            hintStyle: const TextStyle(color: Color(0xFF4A607A)),
+                            filled: true,
+                            fillColor: const Color(0xFF141F35),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          ),
+                        ),
+                        if (emailError != null) ...[
+                          const SizedBox(height: 6),
+                          Text(emailError!, style: const TextStyle(color: Color(0xFFFF5252), fontSize: 12)),
+                        ],
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          height: 46,
+                          child: ElevatedButton(
+                            onPressed: loading ? null : () async {
+                              setInner(() { loading = true; emailError = null; });
+                              try {
+                                await AuthService().signInWithEmailPassword(
+                                  emailCtrl.text.trim(), passCtrl.text.trim());
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Signed in successfully!')));
+                                }
+                              } catch (e) {
+                                setInner(() {
+                                  loading = false;
+                                  emailError = 'Incorrect email or password.';
+                                });
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF141F35),
+                              foregroundColor: const Color(0xFF00E5FF),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: loading
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)))
+                              : const Text('Sign in with email', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ],
           ),
         );
       },
     );
   }
+
 
   // ─── Existing handlers ─────────────────────────────────────────
 
