@@ -101,3 +101,25 @@ def increment_views(post_id: str) -> bool:
     doc_ref = db.collection(COLLECTION_NAME).document(post_id)
     doc_ref.update({"unique_views": firestore.Increment(1)})
     return True
+
+
+def delete_post(post_id: str, caller_uid: str):
+    """
+    Deletes a post if it exists and belongs to the caller.
+    Returns:
+      None  — post not found
+      False — caller does not own the post
+      True  — deleted successfully
+    """
+    if not db:
+        raise Exception("Firestore client not initialized")
+    doc_ref = db.collection(COLLECTION_NAME).document(post_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        return None
+    data = doc.to_dict()
+    owner_id = data.get("owner_id") or data.get("creator_id")
+    if owner_id != caller_uid:
+        return False
+    doc_ref.delete()
+    return True

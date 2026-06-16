@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/post.dart';
 
@@ -37,6 +38,28 @@ class ApiService {
       return Post.fromJson(jsonDecode(response.body));
     } else {
       throw Exception('Failed to create post: ${response.body}');
+    }
+  }
+
+  /// Deletes a post via the authenticated backend endpoint.
+  /// The backend validates the Firebase ID token and confirms ownership
+  /// before deleting via the Admin SDK — bypassing the Firestore client-write block.
+  Future<bool> deletePost(String postId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+      final idToken = await user.getIdToken();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/posts/$postId'),
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Failed to delete post $postId: $e');
+      return false;
     }
   }
 

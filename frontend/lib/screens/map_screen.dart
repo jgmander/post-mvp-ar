@@ -1384,10 +1384,24 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 IconButton(
                                   icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
                                   onPressed: () async {
-                                    await doc.reference.delete();
+                                    final postId = doc.id;
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (ctx) => AlertDialog(
+                                        backgroundColor: _PostColors.surface,
+                                        title: const Text('Delete Post?', style: TextStyle(color: _PostColors.textPrimary)),
+                                        content: const Text('This will permanently remove your post from the world.', style: TextStyle(color: _PostColors.textSecondary)),
+                                        actions: [
+                                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: _PostColors.textSecondary))),
+                                          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.redAccent))),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirmed != true || !context.mounted) return;
+                                    final success = await ApiService().deletePost(postId);
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Post deleted')),
+                                        SnackBar(content: Text(success ? 'Post deleted' : 'Could not delete post. Try again.')),
                                       );
                                     }
                                   },

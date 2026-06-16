@@ -5,3 +5,4 @@ google-cloud-aiplatform
 pydantic
 google-cloud-secret-manager
 python-geohash
+firebase-admin
