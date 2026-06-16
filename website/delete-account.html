@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Delete Account — Post Spatial</title>
+  <meta name="description" content="Request deletion of your Post Spatial account and associated data." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2300e5ff'/><text y='22' x='6' font-size='18'>📍</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .delete-card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(0,229,255,0.15);
+      border-radius: 16px;
+      padding: 32px;
+      margin: 24px 0;
+    }
+    .delete-card h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #f0f4ff;
+    }
+    .step-list {
+      list-style: none;
+      padding: 0;
+      counter-reset: steps;
+    }
+    .step-list li {
+      counter-increment: steps;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      color: #8896b0;
+      line-height: 1.6;
+    }
+    .step-list li:last-child { border-bottom: none; }
+    .step-list li::before {
+      content: counter(steps);
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      background: rgba(0,229,255,0.12);
+      border: 1px solid rgba(0,229,255,0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #00e5ff;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.9rem;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 10px 12px;
+      background: rgba(0,229,255,0.06);
+      color: #00e5ff;
+      font-weight: 600;
+      border-bottom: 1px solid rgba(0,229,255,0.15);
+    }
+    .data-table td {
+      padding: 10px 12px;
+      color: #8896b0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      vertical-align: top;
+    }
+    .badge-deleted { color: #ff5252; font-weight: 600; }
+    .badge-retained { color: #ffd740; font-weight: 600; }
+    .email-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 20px;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #003c4a, #005566);
+      border: 1px solid rgba(0,229,255,0.35);
+      border-radius: 12px;
+      color: #00e5ff;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .email-btn:hover {
+      background: rgba(0,229,255,0.15);
+      transform: translateY(-1px);
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-dot">📍</div>
+    <span class="nav-logo-text">Post Spatial</span>
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="privacy.html">Privacy</a>
+    <a href="support.html">Support</a>
+  </div>
+  <a href="/#cta" class="nav-cta">Download</a>
+</nav>
+
+<div class="inner-page">
+  <div class="container">
+    <h1>Delete Your Account</h1>
+    <p style="color:#8896b0; font-size:1.05rem; margin-bottom:32px;">
+      You can delete your Post Spatial account and associated data at any time using the steps below.
+      Deletion is permanent and cannot be undone.
+    </p>
+
+    <!-- In-app method -->
+    <div class="delete-card">
+      <h2>📱 Delete from the App</h2>
+      <ol class="step-list">
+        <li>Open Post Spatial on your device.</li>
+        <li>Tap the <strong>Profile</strong> icon in the bottom navigation bar.</li>
+        <li>Scroll down and tap <strong>Account Settings</strong>.</li>
+        <li>Tap <strong>Delete Account</strong> and confirm when prompted.</li>
+      </ol>
+      <p style="color:#8896b0; margin-top:16px; font-size:0.9rem;">
+        Your account and all associated data will be permanently deleted within <strong>30 days</strong>.
+      </p>
+    </div>
+
+    <!-- Email method -->
+    <div class="delete-card">
+      <h2>✉️ Request Deletion by Email</h2>
+      <p style="color:#8896b0; margin-bottom:16px;">
+        If you are unable to access the app, send a deletion request to our support team.
+        Include the email address or user ID associated with your account.
+        We will process your request within <strong>30 days</strong>.
+      </p>
+      <a href="mailto:privacy@get-post.co?subject=Account%20Deletion%20Request&body=Please%20delete%20my%20Post%20Spatial%20account%20and%20all%20associated%20data.%0A%0AEmail%20or%20User%20ID%3A%20" class="email-btn">
+        📧 Email privacy@get-post.co
+      </a>
+    </div>
+
+    <!-- What gets deleted -->
+    <div class="delete-card">
+      <h2>🗑️ What Data Is Deleted vs. Retained</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Data Type</th>
+            <th>Action on Deletion</th>
+            <th>Retention Period</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Firebase account (UID, email)</td>
+            <td class="badge-deleted">Permanently deleted</td>
+            <td>Within 30 days</td>
+          </tr>
+          <tr>
+            <td>Posts you created (text, location)</td>
+            <td class="badge-deleted">Permanently deleted</td>
+            <td>Within 30 days</td>
+          </tr>
+          <tr>
+            <td>Reports you filed against other content</td>
+            <td class="badge-retained">Reporter ID anonymised</td>
+            <td>Retained for safety audit (90 days), then purged</td>
+          </tr>
+          <tr>
+            <td>Aggregated, anonymised analytics</td>
+            <td class="badge-retained">Retained anonymised</td>
+            <td>Indefinite (no personal identifiers)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Partial deletion -->
+    <div class="delete-card">
+      <h2>🗂️ Delete Individual Posts (Without Deleting Account)</h2>
+      <ol class="step-list">
+        <li>Open Post Spatial and go to your <strong>Profile</strong>.</li>
+        <li>Tap any post you have created.</li>
+        <li>Tap the <strong>Delete</strong> icon (trash can) and confirm.</li>
+      </ol>
+      <p style="color:#8896b0; margin-top:16px; font-size:0.9rem;">
+        Individual posts are deleted immediately and permanently from all users' views.
+      </p>
+    </div>
+
+    <p style="color:#4a607a; font-size:0.85rem; margin-top:32px;">
+      For questions about your data, see our <a href="privacy.html" style="color:#00e5ff;">Privacy Policy</a>
+      or contact <a href="mailto:privacy@get-post.co" style="color:#00e5ff;">privacy@get-post.co</a>.
+      Last updated: June 2026.
+    </p>
+  </div>
+</div>
+
+</body>
+</html>
