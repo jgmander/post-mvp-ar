@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Post Spatial — Leave Your Mark on the Real World</title>
+  <meta name="description" content="Drop AR notes onto real buildings. Post uses Google's Visual Positioning System to anchor your messages to exact GPS coordinates — discovered by anyone walking by." />
+  <meta property="og:title" content="Post Spatial — Leave Your Mark on the Real World" />
+  <meta property="og:description" content="Drop AR notes onto real buildings. Discovered by anyone walking by." />
+  <meta property="og:image" content="https://dbomar-post-mvp.web.app/assets/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2300e5ff'/><text y='22' x='6' font-size='18'>📍</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ── Nav ── -->
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-dot">📍</div>
+    <span class="nav-logo-text">Post Spatial</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#tech">Technology</a>
+    <a href="support.html">Support</a>
+  </div>
+  <a href="#cta" class="nav-cta">Download</a>
+</nav>
+
+<!-- ── Hero ── -->
+<section id="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="container">
+    <div class="hero-inner">
+      <div class="hero-content">
+        <div class="hero-badge">Now available on iOS & Android</div>
+        <h1 class="hero-title">
+          Leave your mark<br />on the <span class="gradient-text">real world</span>
+        </h1>
+        <p class="hero-desc">
+          Post locks your notes to exact GPS coordinates using ARCore Geospatial.
+          Drop a message on any building — anyone walking by can discover it in AR.
+        </p>
+        <div class="hero-actions">
+          <a href="https://apps.apple.com/app/post-spatial/id0000000000" id="hero-ios-btn" class="btn-store">
+            <span class="store-icon">🍎</span>
+            <span class="store-text">
+              <span class="store-label">Download on the</span>
+              <span class="store-name">App Store</span>
+            </span>
+          </a>
+          <a href="https://play.google.com/store/apps/details?id=com.post.spatial" id="hero-android-btn" class="btn-store">
+            <span class="store-icon">▶</span>
+            <span class="store-text">
+              <span class="store-label">Get it on</span>
+              <span class="store-name">Google Play</span>
+            </span>
+          </a>
+        </div>
+      </div>
+      <div class="hero-visual">
+        <div class="phone-glow"></div>
+        <div class="phone-frame">
+          <div class="phone-notch"></div>
+          <div class="phone-screen">
+            <div class="phone-ar-text">VPS Locked</div>
+            <div class="phone-pin"></div>
+            <div class="phone-card">"Best coffee in the city →"<br /><span style="color:#00e5ff;font-size:0.7rem;">📍 42m away</span></div>
+          </div>
+          <div class="phone-accuracy">8.7m accuracy</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Features ── -->
+<section id="features">
+  <div class="container">
+    <div class="features-header">
+      <h2>Not just AR.<br /><span class="gradient-text">Spatial computing.</span></h2>
+      <p>Every post is anchored to real-world GPS coordinates and altitude — persistent across sessions and devices.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📍</div>
+        <h3>Sub-meter positioning</h3>
+        <p>Google's Visual Positioning System reads building features from Street View data to anchor your posts within meters — not just city blocks.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🏢</div>
+        <h3>Building-aware anchoring</h3>
+        <p>StreetscapeGeometry maps the 3D structure of buildings around you. Your pin snaps to surfaces, not just floating in space.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">♾️</div>
+        <h3>Persistent anchors</h3>
+        <p>Close the app and come back tomorrow. Your posts are still there, exactly where you left them, visible to everyone nearby.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗺️</div>
+        <h3>Live map view</h3>
+        <p>See every post within 1km on a map. Tap any pin to preview the message before you walk over to view it in AR.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Context-aware messages</h3>
+        <p>Quick post suggestions adapt to the place category — coffee shops, parks, transit hubs. Drop in seconds.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔒</div>
+        <h3>Privacy first</h3>
+        <p>Camera data never leaves your device. No selling data. No surveillance. Just the posts you choose to share.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ── -->
+<section id="how">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:64px;">
+      <h2>Three steps to <span class="gradient-text">drop your first post</span></h2>
+    </div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <h3>Step outside and point your phone</h3>
+          <p>Open Post and point your camera at any building. The VPS accuracy badge turns cyan once the system locks on — usually 2–5 seconds outdoors.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <h3>Hold to charge, release to drop</h3>
+          <p>A reticle snaps to the building surface. Long-press to charge your pin. Release and type your message. It's anchored to that exact spot in the world.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <h3>Others discover it walking by</h3>
+          <p>Anyone with Post who walks within range will see your pin floating on the building in AR. The city becomes a canvas.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Tech ── -->
+<section id="tech">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:16px;">
+      <h2>Built on <span class="gradient-text">real spatial technology</span></h2>
+      <p style="margin-top:12px;">No marker-based tricks. No QR codes. No pre-mapped spaces.</p>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-card">
+        <div>
+          <span class="tech-badge">ARCore Geospatial</span>
+          <h3 style="margin:12px 0 8px;">Google Visual Positioning System</h3>
+          <p style="font-size:0.9rem;">Matches the visual features of real buildings against Google Street View data to determine your exact position and orientation.</p>
+        </div>
+      </div>
+      <div class="tech-card">
+        <div>
+          <span class="tech-badge">StreetscapeGeometry</span>
+          <h3 style="margin:12px 0 8px;">3D Building Mesh</h3>
+          <p style="font-size:0.9rem;">Real-time 3D geometry of building facades lets pins anchor to surfaces with sub-meter accuracy, not just coordinates.</p>
+        </div>
+      </div>
+      <div class="tech-card">
+        <div>
+          <span class="tech-badge">GeoHash Indexing</span>
+          <h3 style="margin:12px 0 8px;">Instant Spatial Queries</h3>
+          <p style="font-size:0.9rem;">9-tile GeoHash fan-out queries find every post within your radius in milliseconds regardless of how many posts exist globally.</p>
+        </div>
+      </div>
+      <div class="tech-card">
+        <div>
+          <span class="tech-badge">Firebase + Cloud Run</span>
+          <h3 style="margin:12px 0 8px;">Production Backend</h3>
+          <p style="font-size:0.9rem;">Every post is written through an authenticated backend API — never directly to the database. Built to scale from day one.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section id="cta">
+  <div class="container">
+    <h2>The city is waiting.<br /><span class="gradient-text">Drop your first post.</span></h2>
+    <p>Available on iPhone and Android. Works anywhere Google Street View has been.</p>
+    <div class="cta-buttons">
+      <a href="https://apps.apple.com/app/post-spatial/id0000000000" id="cta-ios-btn" class="btn-store">
+        <span class="store-icon">🍎</span>
+        <span class="store-text">
+          <span class="store-label">Download on the</span>
+          <span class="store-name">App Store</span>
+        </span>
+      </a>
+      <a href="https://play.google.com/store/apps/details?id=com.post.spatial" id="cta-android-btn" class="btn-store">
+        <span class="store-icon">▶</span>
+        <span class="store-text">
+          <span class="store-label">Get it on</span>
+          <span class="store-name">Google Play</span>
+        </span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ── -->
+<footer>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-dot">📍</div>
+    <span class="nav-logo-text">Post Spatial</span>
+  </a>
+  <div class="footer-links">
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="support.html">Support</a>
+  </div>
+  <p class="footer-copy">© 2026 Post Spatial. All rights reserved. Built with ARCore Geospatial.</p>
+</footer>
+
+</body>
+</html>

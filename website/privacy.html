@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — Post Spatial</title>
+  <meta name="description" content="Privacy Policy for Post Spatial. Learn how we handle your data." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2300e5ff'/><text y='22' x='6' font-size='18'>📍</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-dot">📍</div>
+    <span class="nav-logo-text">Post Spatial</span>
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="terms.html">Terms</a>
+    <a href="support.html">Support</a>
+  </div>
+  <a href="/#cta" class="nav-cta">Download</a>
+</nav>
+
+<div class="inner-page">
+  <div class="container">
+    <div class="prose">
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: June 16, 2026</p>
+
+      <p>Post Spatial ("Post", "we", "us", or "our") is committed to protecting your privacy. This policy explains what data we collect, why we collect it, and how we handle it.</p>
+
+      <h2>1. Data We Collect</h2>
+      <p><strong style="color:#f0f6ff;">Camera</strong><br />Your camera feed is used exclusively to power the ARCore Geospatial session on your device. Camera pixel data is never transmitted to our servers, never stored, and never shared.</p>
+
+      <p><strong style="color:#f0f6ff;">Location</strong><br />We collect GPS coordinates when you drop a post. These coordinates are stored in our database to anchor your post to a location. We collect latitude, longitude, and altitude with enough precision to place a pin on a building surface (approximately 4 decimal places, ~11 meter resolution, in our logs). Raw coordinates are transmitted securely over HTTPS.</p>
+
+      <p><strong style="color:#f0f6ff;">Account Information</strong><br />Post supports anonymous use, Google Sign-In, and Sign in with Apple. If you sign in with Google or Apple, we store your account identifier (UID) to associate you with your posts. We do not store passwords. If you use Sign in with Apple with "Hide My Email", we respect that and store only the relay address Apple provides.</p>
+
+      <p><strong style="color:#f0f6ff;">Post Content</strong><br />The caption text, place name, and place category you enter when dropping a post are stored in our database (Google Cloud Firestore). This content is visible to other Post users in proximity to the post location.</p>
+
+      <p><strong style="color:#f0f6ff;">Usage Data</strong><br />We collect minimal usage signals: view counts per post, and anonymized session logs for crash diagnostics. We do not use third-party analytics SDKs.</p>
+
+      <h2>2. How We Use Your Data</h2>
+      <ul>
+        <li>To anchor your posts to real-world GPS coordinates</li>
+        <li>To display nearby posts to other users in AR</li>
+        <li>To associate posts with your account so you can manage them</li>
+        <li>To moderate content for safety (automated, using Google Vertex AI)</li>
+        <li>To diagnose crashes and improve app stability</li>
+      </ul>
+      <p>We do not sell your data. We do not use your data for advertising. We do not share your data with third parties except as described below.</p>
+
+      <h2>3. Third-Party Services</h2>
+      <ul>
+        <li><strong style="color:#f0f6ff;">Google ARCore / Maps Platform</strong> — processes on-device visual data to enable AR. Subject to <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a>.</li>
+        <li><strong style="color:#f0f6ff;">Firebase (Google)</strong> — our authentication, database, and hosting provider. Subject to <a href="https://firebase.google.com/support/privacy" target="_blank">Firebase Privacy</a>.</li>
+        <li><strong style="color:#f0f6ff;">Google Cloud Run</strong> — our backend API runs on Google infrastructure. Subject to <a href="https://cloud.google.com/terms/data-processing-addendum" target="_blank">GCP DPA</a>.</li>
+        <li><strong style="color:#f0f6ff;">Apple Sign-In / Google Sign-In</strong> — used only if you choose to link your account.</li>
+      </ul>
+
+      <h2>4. Data Retention</h2>
+      <p>Posts are retained until you delete them or your account is deleted. You can delete any of your posts at any time from the profile screen in the app. Deletion is permanent and immediate via our backend API.</p>
+      <p>Anonymous accounts that have been inactive for 180 days may be purged along with their associated posts.</p>
+
+      <h2>5. Your Rights</h2>
+      <p>Depending on your location, you may have the right to:</p>
+      <ul>
+        <li>Access the data we hold about you</li>
+        <li>Request deletion of your data</li>
+        <li>Object to processing of your data</li>
+        <li>Data portability (export your posts)</li>
+      </ul>
+      <p>To exercise any of these rights, contact us at <a href="mailto:privacy@get-post.co">privacy@get-post.co</a>.</p>
+
+      <h2>6. Children</h2>
+      <p>Post Spatial is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has provided us with personal information, contact us and we will delete it.</p>
+
+      <h2>7. Security</h2>
+      <p>All data is transmitted over HTTPS. Firestore security rules ensure that post data can only be written through our authenticated backend API — not directly by clients. Firebase ID tokens are verified server-side on every write and delete operation.</p>
+
+      <h2>8. Changes to This Policy</h2>
+      <p>We may update this policy as the app evolves. We will update the "Last updated" date at the top and, for material changes, provide in-app notification.</p>
+
+      <h2>9. Contact</h2>
+      <p>Questions about this policy:<br />
+      📧 <a href="mailto:privacy@get-post.co">privacy@get-post.co</a><br />
+      🔗 <a href="https://github.com/jgmander/post-mvp-ar/issues">github.com/jgmander/post-mvp-ar/issues</a></p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <a href="/" class="nav-logo">
+    <div class="nav-logo-dot">📍</div>
+    <span class="nav-logo-text">Post Spatial</span>
+  </a>
+  <div class="footer-links">
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="support.html">Support</a>
+  </div>
+  <p class="footer-copy">© 2026 Post Spatial. All rights reserved.</p>
+</footer>
+
+</body>
+</html>
