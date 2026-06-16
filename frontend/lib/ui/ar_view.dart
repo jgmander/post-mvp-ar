@@ -947,11 +947,17 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
               icon: const Icon(Icons.send, color: Colors.cyanAccent),
               tooltip: 'Share',
               onPressed: () {
-                String place = post.placeName != null && post.placeName != 'Unknown Location'
+                final place = (post.placeName != null && post.placeName != 'Unknown Location')
                     ? post.placeName! : 'this spot';
-                Share.share('Check out this Post I found at $place: ${post.messageContent}');
+                final lat = post.latitude;
+                final lng = post.longitude;
+                final mapsUrl = 'https://maps.google.com/?q=$lat,$lng';
+                SharePlus.instance.share(ShareParams(
+                  text: '📍 Found on Post Spatial at $place: "${post.messageContent}"\n\n$mapsUrl\n\nGet the app: https://dbomar-post-mvp.web.app',
+                ));
               },
             ),
+
             // Hide this post
             IconButton(
               icon: const Icon(Icons.visibility_off_outlined, color: Color(0xFF8896B0)),

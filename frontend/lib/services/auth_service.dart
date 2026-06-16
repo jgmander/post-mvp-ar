@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -239,6 +240,37 @@ class AuthService {
         rethrow;
       }
     }
+  }
+
+  /// Permanently deletes the current user's account and all associated data.
+  /// Order: posts → user doc → SharedPreferences → Firebase Auth account.
+  Future<void> deleteAccount() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+
+    // 1. Delete all posts owned by this user
+    final posts = await FirebaseFirestore.instance
+        .collection('posts')
+        .where('owner_id', isEqualTo: uid)
+        .get();
+    for (final doc in posts.docs) {
+      await doc.reference.delete();
+    }
+
+    // 2. Delete user document
+    await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+
+    // 3. Clear local SharedPreferences (hidden posts etc.)
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    // 4. Delete Firebase Auth account (requires recent sign-in — catches need-reauthentication)
+    await user.delete();
+
+    _pendingGoogleCredential = null;
+    // Sign back in anonymously so the app remains functional
+    await signInAnonymously();
   }
 
   Future<void> signOut() async {

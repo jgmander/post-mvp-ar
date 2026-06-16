@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -623,7 +624,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 ),
                               ),
                             ),
-                             // ── Report / Hide ──────────────────────
+                             // ── Report / Hide / Share ──────────────
                              Padding(
                                padding: const EdgeInsets.only(bottom: 12),
                                child: Row(
@@ -645,7 +646,26 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                      label: const Text('Hide',
                                        style: TextStyle(color: Color(0xFF4A607A), fontSize: 12)),
                                    ),
-                                   const SizedBox(width: 16),
+                                   const SizedBox(width: 8),
+                                   // ── Share ──────────────────────────
+                                   TextButton.icon(
+                                     onPressed: () {
+                                       final caption = p.messageContent ?? '';
+                                       final lat = p.latitude;
+                                       final lng = p.longitude;
+                                       final mapsUrl = 'https://maps.google.com/?q=$lat,$lng';
+                                       SharePlus.instance.share(
+                                         ShareParams(
+                                           text: '📍 Found on Post Spatial: "$caption"\n\n$mapsUrl\n\nGet the app: https://dbomar-post-mvp.web.app',
+                                         ),
+                                       );
+                                     },
+                                     icon: const Icon(Icons.share_outlined,
+                                       size: 16, color: Color(0xFF00E5FF)),
+                                     label: const Text('Share',
+                                       style: TextStyle(color: Color(0xFF00E5FF), fontSize: 12)),
+                                   ),
+                                   const SizedBox(width: 8),
                                    TextButton.icon(
                                      onPressed: () async {
                                        final postId = p.id ?? '';
@@ -1531,6 +1551,58 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent.withValues(alpha: 0.8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ── Delete Account ──────────────────────────────────────────
+              TextButton(
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: const Color(0xFF161B25),
+                      title: const Text('Delete Account?',
+                        style: TextStyle(color: Color(0xFFF0F4FF))),
+                      content: const Text(
+                        'This permanently deletes your account and all posts. This cannot be undone.',
+                        style: TextStyle(color: Color(0xFF8896B0))),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel',
+                            style: TextStyle(color: Color(0xFF8896B0)))),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Delete Account',
+                            style: TextStyle(color: Color(0xFFFF5252),
+                              fontWeight: FontWeight.w700))),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true) {
+                    try {
+                      await AuthService().deleteAccount();
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Account deleted.')));
+                      }
+                    } on Exception catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(
+                            'Could not delete account. Please sign out and sign back in, then try again. ($e)')));
+                      }
+                    }
+                  }
+                },
+                child: const Text(
+                  'Delete Account',
+                  style: TextStyle(
+                    color: Color(0xFF4A607A),
+                    fontSize: 13,
+                    decoration: TextDecoration.underline,
                   ),
                 ),
               ),
