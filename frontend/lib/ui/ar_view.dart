@@ -18,7 +18,7 @@ class ArView extends StatefulWidget {
   _ArViewState createState() => _ArViewState();
 }
 
-class _ArViewState extends State<ArView> with TickerProviderStateMixin {
+class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsBindingObserver {
   late ArCoreController arCoreController;
   final ApiService _apiService = ApiService();
   List<Post> nearbyPosts = [];
@@ -102,9 +102,22 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
       CurvedAnimation(parent: _reticleGlowController, curve: Curves.easeInOut),
     );
 
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadPostsInBackground();
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      // App is backgrounded — pause AR polling to save battery.
+      _vpsTimer?.cancel();
+      _vpsTimer = null;
+    } else if (state == AppLifecycleState.resumed && _arCoreInitialized) {
+      // App is foregrounded — restart the VPS polling loop.
+      _vpsTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _updateVPS());
+    }
   }
 
   Future<void> _loadPostsInBackground() async {
@@ -991,6 +1004,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _vpsTimer?.cancel();
     _holdHapticTimer?.cancel();
     _recordingTimer?.cancel();

@@ -444,7 +444,8 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                 coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
                 altitudeAboveRooftop: alt,
                 eastUpSouthQAnchor: simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-            ) { anchor, state in
+            ) { [weak self] anchor, state in
+                guard let self = self else { return }
                 DispatchQueue.main.async {
                     if let anchor = anchor {
                         let sphere = self.createSphereNode(name: name, map: map)
@@ -744,7 +745,8 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                 coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
                 altitudeAboveTerrain: alt,
                 eastUpSouthQAnchor: simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-            ) { anchor, state in
+            ) { [weak self] anchor, state in
+                guard let self = self else { return }
                 DispatchQueue.main.async {
                     if let anchor = anchor {
                         let sphere = self.createSphereNode(name: name, map: map)

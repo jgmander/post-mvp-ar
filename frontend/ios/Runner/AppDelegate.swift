@@ -55,6 +55,14 @@ import CoreLocation
       // channel. This AppDelegate bridge is kept as a compatibility stub.
       if call.method == "anchorModel" {
         result(nil)
+      } else if call.method == "startArSession" {
+        // AR session lifecycle is owned by ArCoreViewIOS — acknowledge without action.
+        print("DEBUG: [Post] startArSession received by AppDelegate stub (ArCoreViewIOS owns session)")
+        result(true)
+      } else if call.method == "stopArSession" {
+        // AR session lifecycle is owned by ArCoreViewIOS — acknowledge without action.
+        print("DEBUG: [Post] stopArSession received by AppDelegate stub (ArCoreViewIOS owns session)")
+        result(true)
       } else {
         result(FlutterMethodNotImplemented)
       }

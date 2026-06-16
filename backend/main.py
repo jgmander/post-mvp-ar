@@ -10,14 +10,7 @@ app = FastAPI(title="Post AR MVP Backend")
 def read_root():
     return {"status": "ok", "service": "post-mvp-backend"}
 
-@app.get("/v1/auth/config")
-def get_auth_config():
-    from services.secret_service import get_prod_keys
-    keys = get_prod_keys()
-    if "MAPS_API_KEY" not in keys:
-        raise HTTPException(status_code=500, detail="Missing secure keys")
-    # In a full app, this would be obfuscated or session-limited
-    return {"maps_api_key": keys["MAPS_API_KEY"]}
+
 
 def moderate_content(caption: str) -> bool:
     """

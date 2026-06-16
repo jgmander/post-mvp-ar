@@ -4,3 +4,4 @@ google-cloud-firestore
 google-cloud-aiplatform
 pydantic
 google-cloud-secret-manager
+python-geohash

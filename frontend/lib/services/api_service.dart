@@ -6,7 +6,10 @@ class ApiService {
   // Cloud Run Production URL
   static const String baseUrl = 'https://post-mvp-backend-clb6khb3uq-uc.a.run.app';
 
-  ApiService() {
+  // Singleton pattern — prevents multiple redundant health check pings on boot.
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal() {
     _healthCheck();
   }
 
@@ -50,29 +53,20 @@ class ApiService {
     }
   }
 
-  String? _cachedMapsApiKey;
-
+  // The Maps API key is injected at compile time via --dart-define=MAPS_API_KEY=...
+  // and bound to the native Info.plist / build.gradle. There is no runtime fetch needed.
+  // Use String.fromEnvironment('MAPS_API_KEY') if you need it in Dart directly.
   Future<Map<String, String>?> getPlaceFromCoordinates(double lat, double lng) async {
-    if (_cachedMapsApiKey == null) {
-      try {
-        final configResponse = await http.get(Uri.parse('$baseUrl/v1/auth/config'));
-        if (configResponse.statusCode == 200) {
-          final data = jsonDecode(configResponse.body);
-          _cachedMapsApiKey = data['maps_api_key'];
-        }
-      } catch (e) {
-        print("Network error fetching auth config: $e");
-      }
-    }
-    
-    if (_cachedMapsApiKey == null || _cachedMapsApiKey!.isEmpty) {
-        print("WARNING: MAPS_API_KEY could not be securely fetched from backend.");
-        return null;
+    final mapsApiKey = const String.fromEnvironment('MAPS_API_KEY');
+
+    if (mapsApiKey.isEmpty) {
+      print('WARNING: MAPS_API_KEY not found in dart-define environment.');
+      return null;
     }
 
     // First try Places API to get a specific business/poi name
     try {
-      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=\$lat,\$lng&radius=15&key=\$_cachedMapsApiKey';
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=15&key=$mapsApiKey';
       final placesResponse = await http.get(Uri.parse(placesUrl));
       if (placesResponse.statusCode == 200) {
         final data = jsonDecode(placesResponse.body);
@@ -86,35 +80,34 @@ class ApiService {
           return {'name': name, 'category': category};
         }
       }
-      
+
       // Fallback to Reverse Geocoding for physical addresses
-      final geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json?latlng=\$lat,\$lng&key=\$_cachedMapsApiKey';
+      final geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$mapsApiKey';
       final geocodeResponse = await http.get(Uri.parse(geocodeUrl));
       if (geocodeResponse.statusCode == 200) {
         final data = jsonDecode(geocodeResponse.body);
         if (data['results'] != null && data['results'].isNotEmpty) {
-           final firstResult = data['results'][0];
-           String address = firstResult['formatted_address'] ?? 'Unknown Address';
-           String category = 'address';
-           if (firstResult['types'] != null && (firstResult['types'] as List).isNotEmpty) {
-             category = firstResult['types'][0].toString().replaceAll('_', ' ');
-           }
-           return {'name': address, 'category': category};
+          final firstResult = data['results'][0];
+          String address = firstResult['formatted_address'] ?? 'Unknown Address';
+          String category = 'address';
+          if (firstResult['types'] != null && (firstResult['types'] as List).isNotEmpty) {
+            category = firstResult['types'][0].toString().replaceAll('_', ' ');
+          }
+          return {'name': address, 'category': category};
         }
       }
     } catch (e) {
-      print('Failed to resolve coordinates: \$e');
+      print('Failed to resolve coordinates: $e');
     }
     return null;
   }
 
   Future<List<String>> getNearbyBuildings(double lat, double lng) async {
-    if (_cachedMapsApiKey == null) {
-      await getPlaceFromCoordinates(lat, lng); // Ensure key is fetched
-    }
+    final mapsApiKey = const String.fromEnvironment('MAPS_API_KEY');
     List<String> placeIds = [];
+    if (mapsApiKey.isEmpty) return placeIds;
     try {
-      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=\$lat,\$lng&radius=30&type=building&key=\$_cachedMapsApiKey';
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=30&type=building&key=$mapsApiKey';
       final response = await http.get(Uri.parse(placesUrl));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -127,7 +120,7 @@ class ApiService {
         }
       }
     } catch (e) {
-      print("Error fetching nearby buildings: \$e");
+      print('Error fetching nearby buildings: $e');
     }
     return placeIds;
   }

@@ -8,8 +8,9 @@ service cloud.firestore {
 
     match /posts/{post} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (request.auth.uid == resource.data.owner_id || isAdmin());
+      // All writes MUST go through the FastAPI backend (Admin SDK / service account).
+      // Direct client writes are blocked to enforce content moderation and prevent spam.
+      allow create, update, delete: if false;
     }
 
     match /users/{userId} {
