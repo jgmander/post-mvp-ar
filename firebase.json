@@ -26,6 +26,10 @@
       {
         "source": "/delete-account",
         "destination": "/delete-account.html"
+      },
+      {
+        "source": "/child-safety",
+        "destination": "/child-safety.html"
       }
     ],
     "headers": [
