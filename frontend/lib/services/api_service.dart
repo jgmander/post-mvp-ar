@@ -28,9 +28,16 @@ class ApiService {
   }
 
   Future<Post> createPost(Post post) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Not authenticated');
+    final idToken = await user.getIdToken();
+
     final response = await http.post(
       Uri.parse('$baseUrl/posts'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      },
       body: jsonEncode(post.toJson()),
     );
 
@@ -40,6 +47,7 @@ class ApiService {
       throw Exception('Failed to create post: ${response.body}');
     }
   }
+
 
   /// Deletes a post via the authenticated backend endpoint.
   /// The backend validates the Firebase ID token and confirms ownership
