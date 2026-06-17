@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 google-cloud-firestore
-google-cloud-aiplatform
+google-genai
 pydantic
 google-cloud-secret-manager
 python-geohash
