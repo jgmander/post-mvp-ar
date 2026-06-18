@@ -5,6 +5,7 @@ class PostCreate(BaseModel):
     latitude: float
     longitude: float
     altitude: float
+    post_type: str = "pin"
     caption: str
     creator_id: str
     owner_id: Optional[str] = None

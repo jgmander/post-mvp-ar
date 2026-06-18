@@ -520,11 +520,8 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                                   shape: sphere,
                                 );
 
-                                if (selectedPostType == 'pin') {
-                                  await arCoreController.resolveAnchorOnTerrainAsync(node, lat, lng, 0.0);
-                                } else {
-                                  await arCoreController.addEarthAnchorNode(node, lat, lng, postAlt);
-                                }
+                                final altOffset = selectedPostType == 'balloon' ? 15.0 : 0.0;
+                                await arCoreController.resolveAnchorOnTerrainAsync(node, lat, lng, altOffset);
 
                                 // THE THUD
                                 HapticFeedback.heavyImpact();
@@ -889,10 +886,16 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
       }, orElse: () => Post(latitude: 0, longitude: 0, altitude: 0, messageContent: '', creatorId: '', visibilityType: ''));
       
       if (post.latitude != 0) {
+        final isBalloon = post.postType == 'balloon';
+        final radius = isBalloon ? 2.5 : 0.2;
+        final altOffset = isBalloon ? 15.0 : 0.0;
+        final fallbackAlt = _currentPose?['altitude'] != null
+            ? (_currentPose!['altitude'] as double) + altOffset
+            : post.altitude;
         final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
-        final sphere = ArCoreSphere(materials: [material], radius: 0.2);
+        final sphere = ArCoreSphere(materials: [material], radius: radius);
         final fallbackNode = ArCoreNode(name: name, shape: sphere);
-        arCoreController.addEarthAnchorNode(fallbackNode, post.latitude, post.longitude, post.altitude);
+        arCoreController.addEarthAnchorNode(fallbackNode, post.latitude, post.longitude, fallbackAlt);
       }
     }
   }
@@ -1040,11 +1043,8 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
       final sphere = ArCoreSphere(materials: [material], radius: radius);
       final node = ArCoreNode(name: postId, shape: sphere);
       
-      if (post.postType == 'pin') {
-        arCoreController.resolveAnchorOnTerrainAsync(node, post.latitude, post.longitude, 0.0);
-      } else {
-        arCoreController.addEarthAnchorNode(node, post.latitude, post.longitude, post.altitude);
-      }
+      final altOffset = post.postType == 'balloon' ? 15.0 : 0.0;
+      arCoreController.resolveAnchorOnTerrainAsync(node, post.latitude, post.longitude, altOffset);
       index++;
     }
   }
