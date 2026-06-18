@@ -15,7 +15,7 @@ jobs:
   build_and_distribute:
     runs-on: ubuntu-latest
     permissions:
-      contents: 'read'
+      contents: 'write'
       id-token: 'write'
     defaults:
       run:
@@ -24,6 +24,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Auto-bump version code
+        working-directory: ${{ github.workspace }}
+        run: |
+          CURRENT=$(grep "^version:" frontend/pubspec.yaml | grep -o '+[0-9]*' | tr -d '+')
+          NEXT=$((CURRENT + 1))
+          sed -i "s/version: 1.0.0+${CURRENT}/version: 1.0.0+${NEXT}/" frontend/pubspec.yaml
+          echo "VERSION_CODE=${NEXT}" >> $GITHUB_ENV
+          git config user.email "ci@post.co"
+          git config user.name "GitHub Actions"
+          git add frontend/pubspec.yaml
+          git commit -m "ci: auto-bump version code to ${NEXT} [skip ci]"
+          git push
 
       - name: Setup Java
         uses: actions/setup-java@v4
