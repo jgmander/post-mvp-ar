@@ -61,3 +61,4 @@ Completed:
 - RBAC admin dashboard
 - Map boot architecture overhaul (zero-latency, reactive location streaming)
 - Peer review by Gemini Deep Research
+Last Android deploy: 2026-06-18 03:06 UTC — commit 89fc502a0cb3a715fe30ad09d439f3930adf91bf ✅
