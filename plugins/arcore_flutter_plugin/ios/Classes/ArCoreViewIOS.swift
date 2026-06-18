@@ -28,6 +28,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
 
     // Node tracking
     private var nodeMap: [String: SCNNode] = [:]
+    private var garAnchorMap: [UUID: (node: SCNNode, anchor: GARAnchor)] = [:]
 
     // Geospatial state
     private var latestGeospatialTransform: GARGeospatialTransform?
@@ -417,6 +418,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             sphere.simdTransform = anchor.transform
             arView?.scene.rootNode.addChildNode(sphere)
             nodeMap[name] = sphere
+            garAnchorMap[anchor.identifier] = (node: sphere, anchor: anchor)
 
             result(nil)
         } catch {
@@ -452,6 +454,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                         sphere.simdTransform = anchor.transform
                         self.arView?.scene.rootNode.addChildNode(sphere)
                         self.nodeMap[name] = sphere
+                        self.garAnchorMap[anchor.identifier] = (node: sphere, anchor: anchor)
                         self.methodChannel.invokeMethod("onRooftopAnchorResolved", arguments: [
                             "name": name,
                             "success": true,
@@ -568,6 +571,14 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         guard let validGarFrame = garFrame else { return }
         self.latestFrame = validGarFrame
 
+        // Sync GARAnchor transforms to SCNNodes
+        for anchor in validGarFrame.anchors {
+            if let mapping = garAnchorMap[anchor.identifier] {
+                mapping.node.simdTransform = anchor.transform
+                mapping.node.isHidden = anchor.trackingState != .tracking
+            }
+        }
+
         // Update geospatial transform
         if let earth = validGarFrame.earth,
            earth.trackingState == .tracking {
@@ -658,6 +669,14 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         if let node = nodeMap[name] {
             node.removeFromParentNode()
             nodeMap.removeValue(forKey: name)
+            
+            // Remove from garAnchorMap and GARSession
+            if let anchorId = garAnchorMap.first(where: { $0.value.node == node })?.key,
+               let mapping = garAnchorMap[anchorId] {
+                garAnchorMap.removeValue(forKey: anchorId)
+                garSession?.remove(mapping.anchor)
+            }
+            
             debugLog("Removed node: \(name)")
         }
         result(nil)
@@ -716,6 +735,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         arView?.session.pause()
         garSession = nil
         nodeMap.removeAll()
+        garAnchorMap.removeAll()
         debugLog("ARCore iOS disposed")
     }
 
@@ -753,6 +773,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                         sphere.simdTransform = anchor.transform
                         self.arView?.scene.rootNode.addChildNode(sphere)
                         self.nodeMap[name] = sphere
+                        self.garAnchorMap[anchor.identifier] = (node: sphere, anchor: anchor)
                         self.methodChannel.invokeMethod("onTerrainAnchorResolved", arguments: [
                             "name": name,
                             "success": true,
