@@ -97,7 +97,7 @@ class ApiService {
 
     // First try Places API to get a specific business/poi name
     try {
-      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=15&key=$mapsApiKey';
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=50&key=$mapsApiKey';
       final placesResponse = await http.get(Uri.parse(placesUrl));
       if (placesResponse.statusCode == 200) {
         final data = jsonDecode(placesResponse.body);
@@ -138,7 +138,7 @@ class ApiService {
     List<String> placeIds = [];
     if (mapsApiKey.isEmpty) return placeIds;
     try {
-      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=30&type=building&key=$mapsApiKey';
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=50&type=building&key=$mapsApiKey';
       final response = await http.get(Uri.parse(placesUrl));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
