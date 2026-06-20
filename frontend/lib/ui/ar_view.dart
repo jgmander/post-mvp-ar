@@ -156,8 +156,10 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
             if (!_postsRendered) {
               print('VPS Lock Achieved: Rendering ${nearbyPosts.length} persistent posts');
               _postsRendered = true;
-              _renderPosts();
             }
+            // Always call _renderPosts on every VPS lock tick so failed
+            // terrain anchors (removed from _renderedPostIds) get retried.
+            _renderPosts();
           } else {
             // No lock yet — decode failure reason from native payload
             if (_hasVpsLock) {
@@ -493,8 +495,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                             setModalState(() => isSubmitting = true);
 
                             try {
-                              final alt = _currentPose!['altitude'] as double;
-                              final postAlt = selectedPostType == 'balloon' ? alt + 15.0 : alt;
+                              // Store terrain-relative altitude (meters above surface),
+                              // NOT GPS ellipsoidal altitude which is -8m to -30m in NY area.
+                              final postAlt = selectedPostType == 'balloon' ? 15.0 : 0.0;
                               final newPost = Post(
                                 latitude: lat, longitude: lng, altitude: postAlt,
                                 messageContent: contentController.text,
@@ -878,25 +881,11 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
     if (success) {
       print('Terrain Anchor Lock Achieved for Post: $name');
     } else {
-      print('Terrain Anchor FAILED for Post: $name | State: $state');
-      // If it fails, fallback to Earth Anchor using original GPS alt
-      final post = nearbyPosts.firstWhere((p) {
-        String pId = p.id ?? "temp_${nearbyPosts.indexOf(p)}";
-        return pId == name;
-      }, orElse: () => Post(latitude: 0, longitude: 0, altitude: 0, messageContent: '', creatorId: '', visibilityType: ''));
-      
-      if (post.latitude != 0) {
-        final isBalloon = post.postType == 'balloon';
-        final radius = isBalloon ? 2.5 : 0.2;
-        final altOffset = isBalloon ? 15.0 : 0.0;
-        final fallbackAlt = _currentPose?['altitude'] != null
-            ? (_currentPose!['altitude'] as double) + altOffset
-            : post.altitude;
-        final material = ArCoreMaterial(color: Colors.blueAccent.withOpacity(0.8));
-        final sphere = ArCoreSphere(materials: [material], radius: radius);
-        final fallbackNode = ArCoreNode(name: name, shape: sphere);
-        arCoreController.addEarthAnchorNode(fallbackNode, post.latitude, post.longitude, fallbackAlt);
-      }
+      print('Terrain Anchor FAILED for Post: $name | State: $state — will retry on next VPS tick');
+      // Remove from rendered set so _renderPosts() retries on the next VPS lock tick.
+      // Do NOT fall back to addEarthAnchorNode — that uses GPS ellipsoidal altitude
+      // which is -8m to -30m in the NY area, placing posts underground.
+      _renderedPostIds.remove(name);
     }
   }
 
@@ -1043,7 +1032,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
       final sphere = ArCoreSphere(materials: [material], radius: radius);
       final node = ArCoreNode(name: postId, shape: sphere);
       
-      final altOffset = post.postType == 'balloon' ? 15.0 : 0.0;
+      // Use stored altitude-above-terrain value.
+      // Guard against legacy posts that stored raw GPS ellipsoidal altitude
+      // (negative values in NY area): clamp to 0.0 for pins, 15.0 for balloons.
+      double altOffset = post.altitude;
+      if (altOffset < 0) {
+        altOffset = post.postType == 'balloon' ? 15.0 : 0.0;
+      }
       arCoreController.resolveAnchorOnTerrainAsync(node, post.latitude, post.longitude, altOffset);
       index++;
     }
