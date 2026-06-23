@@ -1,5 +1,5 @@
 # Tech Stack — Post Spatial AR
-Last updated: 2026-06-16
+Last updated: 2026-06-20
 
 ## Frontend (Flutter)
 - **Framework:** Flutter 3.41.9 stable
@@ -36,18 +36,51 @@ Last updated: 2026-06-16
 
 ## CI/CD
 - **Android + Backend + Firebase:** GitHub Actions (3 workflows in .github/workflows/)
-  - deploy-android.yml: triggers on frontend/** push → APK → Firebase App Distribution + AAB → Play Store internal track
+  - deploy-android.yml: triggers on frontend/** push (path filter excludes bot commits) → APK → Firebase App Distribution + AAB → Play Store internal track
   - deploy-backend.yml: triggers on backend/** push → Docker → GCR → Cloud Run
   - deploy-firebase.yml: triggers on firebase.json/firestore.*/website/** → Firestore + Hosting
 - **iOS:** Xcode Cloud (App Store Connect) — handles provisioning/signing natively
   - Bridge: frontend/ios/ci_scripts/ci_post_clone.sh (installs Flutter, injects dart-defines, pod install)
   - Secrets: Xcode Cloud Environment Variables (MAPS_API_KEY, MAP_ID, IOS_MAP_ID)
+  - File path filter: frontend/lib/ and frontend/ios/ — bot commits do NOT trigger iOS builds
+
+## AR Anchor Architecture — CRITICAL
+This section documents a hard-won lesson. Do not regress.
+
+### Anchor type: resolveAnchorOnTerrainAsync (ARCore Geospatial API)
+- Used for ALL post placement: both ground pins and sky balloons
+- Signature: resolveAnchorOnTerrainAsync(node, latitude, longitude, altitudeAboveTerrain)
+- `altitudeAboveTerrain` is METERS ABOVE THE TERRAIN SURFACE — NOT absolute WGS-84 altitude
+
+### post.altitude field semantics (LOCKED — DO NOT CHANGE)
+- Ground pin: post.altitude = 0.0 (terrain surface)
+- Sky balloon: post.altitude = 15.0 (15 meters above terrain)
+- This is a terrain-relative offset, NOT GPS/WGS-84 ellipsoidal altitude
+- NEVER store _currentPose['altitude'] (raw GPS) into post.altitude
+  → In NY/LI area, GPS ellipsoidal altitude is -8m to -30m at ground level
+  → Storing GPS alt + 15m for balloons gives +6m absolute → renders at ground level in AR
+
+### Why GPS altitude is wrong here
+- WGS-84 ellipsoidal height vs. orthometric (sea-level) height differ by ~35m in NY/LI
+- resolveAnchorOnTerrainAsync handles the terrain surface automatically — we only supply the offset
+- addEarthAnchorNode uses absolute altitude — DO NOT use for post rendering
+
+### Anchor failure handling
+- If resolveAnchorOnTerrainAsync fails: remove post from _renderedPostIds, retry on next VPS tick
+- Do NOT fall back to addEarthAnchorNode — it uses absolute GPS altitude → underground in NY
+- Legacy posts with post.altitude < 0 (pre-2026-06-20): guard to 0.0 (pin) or 15.0 (balloon)
+
+### VPS lock requirement
+- Posts render only when _currentPose accuracy < 3.0m (VPS locked)
+- _renderPosts() is called on every VPS lock tick (not one-shot) to enable retry of failed anchors
+- _renderedPostIds set prevents duplicate renders; only failed (removed) posts retry
 
 ## Database/Routing Patterns
 - Client read-only from Firestore (direct SDK for reads, streams)
 - All write operations go through Cloud Run backend (authenticated)
 - GeoHash fan-out for proximity queries (9-tile strategy)
 - NoSQL collections: `posts`, `users`, `reports`
+- posts.altitude = terrain-relative offset in meters (0.0 or 15.0) — see AR Anchor Architecture
 
 ## Key Secrets (Never in source control)
 - MAPS_API_KEY — Google Cloud Secret Manager + GitHub Secrets + Xcode Cloud
@@ -59,5 +92,5 @@ Last updated: 2026-06-16
 ## App Identifiers
 - Bundle ID (iOS): com.post.spatial
 - Package Name (Android): com.post.spatial
-- Play Store: Internal track initialized, v25 / 1.0.0
-- TestFlight: Build 31 (Founding Team + Mander Family groups)
+- Play Store: Internal track, version code auto-incrementing via CI
+- TestFlight: Build 61 (Founding Team + Founding Visionaries + Mander Family)
