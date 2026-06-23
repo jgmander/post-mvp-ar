@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:arcore_flutter_plugin/arcore_flutter_plugin.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../services/api_service.dart';
 import '../models/post.dart';
 import 'ar_onboarding_overlay.dart';
@@ -11,6 +12,7 @@ import '../services/auth_service.dart';
 import '../screens/admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/moderation_service.dart';
+import '../theme/app_theme.dart';
 
 class ArView extends StatefulWidget {
   const ArView({super.key});
@@ -36,11 +38,12 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
   VioFailureReason _vioFailureReason = VioFailureReason.none;
 
   // Target property for the Phase 1 compass.
-  // These are passed from the parent navigator route in a real app;
-  // the fallbacks below ensure the compass always shows something meaningful.
+  // Only shown when _isNavigating is true (user tapped a post and chose Navigate).
+  // Defaults to false so the placeholder NYC coords never show for non-NY users.
   static const double _targetLat = 40.7128;
   static const double _targetLng = -74.0060;
   static const String _targetName = 'Target Property';
+  bool _isNavigating = false;
 
   // UI / AR Decoupling
   final GlobalKey _arCoreKey = GlobalKey();
@@ -85,6 +88,10 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
   void initState() {
     super.initState();
 
+    // Keep screen awake during AR session — VPS scanning requires the camera
+    // to stay active. Without this the phone sleeps mid-scan, losing VPS lock.
+    WakelockPlus.enable();
+
     // Pulse animation: 1.0 → 1.4 → 1.0 (breathing ghost sphere)
     _pulseController = AnimationController(
       vsync: this,
@@ -112,12 +119,14 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      // App is backgrounded — pause AR polling to save battery.
+      // App is backgrounded — pause AR polling and release wakelock.
       _vpsTimer?.cancel();
       _vpsTimer = null;
+      WakelockPlus.disable();
     } else if (state == AppLifecycleState.resumed && _arCoreInitialized) {
-      // App is foregrounded — restart the VPS polling loop.
+      // App is foregrounded — restart VPS polling and re-acquire wakelock.
       _vpsTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _updateVPS());
+      WakelockPlus.enable();
     }
   }
 
@@ -145,7 +154,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
         final pose = await arCoreController.getGeospatialPose();
         if (mounted) {
           setState(() => _currentPose = pose);
-          if (pose != null && pose['accuracy'] < 3.0) {
+          if (pose != null && pose['accuracy'] < 1.5) {
             _vpsScanSeconds = 0;
             if (!_hasVpsLock) {
               setState(() {
@@ -516,14 +525,24 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
 
                               if (created.isFlagged == false) {
                                 // Solidify the ghost pin into a real AR sphere
-                                final material = ArCoreMaterial(color: Colors.cyanAccent.withOpacity(0.9));
-                                final sphere = ArCoreSphere(materials: [material], radius: 0.2);
+                                // Own post: teal. Correct radius per post type.
+                                final material = ArCoreMaterial(
+                                  color: AppColors.ownPost.withValues(alpha: 0.9),
+                                );
+                                final sphere = ArCoreSphere(
+                                  materials: [material],
+                                  radius: selectedPostType == 'balloon'
+                                      ? AppSizes.balloonRadius
+                                      : AppSizes.pinRadius,
+                                );
                                 final node = ArCoreNode(
                                   name: created.id ?? "pin_${DateTime.now().millisecondsSinceEpoch}",
                                   shape: sphere,
                                 );
 
-                                final altOffset = selectedPostType == 'balloon' ? 15.0 : 0.0;
+                                final altOffset = selectedPostType == 'balloon'
+                                    ? AppSizes.balloonAltitude
+                                    : AppSizes.pinAltitude;
                                 await arCoreController.resolveAnchorOnTerrainAsync(node, lat, lng, altOffset);
 
                                 // THE THUD
@@ -534,6 +553,13 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                                 setState(() {
                                   nearbyPosts.add(created);
                                   _renderedPostIds.add(node.name!);
+                                });
+
+                                // Refresh nearby posts from backend after 2s so this
+                                // post and any other recently-dropped posts appear
+                                // without requiring an app restart.
+                                Future.delayed(const Duration(seconds: 2), () {
+                                  if (mounted) _loadPostsInBackground();
                                 });
 
                                 Navigator.pop(sheetContext);
@@ -1027,17 +1053,25 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
       String postId = post.id ?? "temp_$index";
       if (_renderedPostIds.contains(postId)) { index++; continue; }
       _renderedPostIds.add(postId);
-      final material = ArCoreMaterial(color: Colors.blueAccent.withValues(alpha: 0.8));
-      final radius = post.postType == 'balloon' ? 2.5 : 0.6;
+      // Own posts render teal, others render violet — both platforms use
+      // AppColors constants so the distinction is always consistent.
+      final currentUserId = AuthService().currentUser?.uid ?? '';
+      final isOwn = post.creatorId == currentUserId || post.ownerId == currentUserId;
+      final material = ArCoreMaterial(
+        color: (isOwn ? AppColors.ownPost : AppColors.othersPost).withValues(alpha: 0.85),
+      );
+      final radius = post.postType == 'balloon' ? AppSizes.balloonRadius : AppSizes.pinRadius;
       final sphere = ArCoreSphere(materials: [material], radius: radius);
       final node = ArCoreNode(name: postId, shape: sphere);
       
       // Use stored altitude-above-terrain value.
       // Guard against legacy posts that stored raw GPS ellipsoidal altitude
-      // (negative values in NY area): clamp to 0.0 for pins, 15.0 for balloons.
+      // (negative values in NY area): clamp using AppSizes constants.
       double altOffset = post.altitude;
       if (altOffset < 0) {
-        altOffset = post.postType == 'balloon' ? 15.0 : 0.0;
+        altOffset = post.postType == 'balloon'
+            ? AppSizes.balloonAltitude
+            : AppSizes.pinAltitude;
       }
       arCoreController.resolveAnchorOnTerrainAsync(node, post.latitude, post.longitude, altOffset);
       index++;
@@ -1172,6 +1206,8 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
     _pulseController.dispose();
     _reticleGlowController.dispose();
     if (_arCoreInitialized) arCoreController.dispose();
+    // Release wakelock when leaving AR view.
+    WakelockPlus.disable();
     super.dispose();
   }
 
@@ -1205,11 +1241,14 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                     children: [
                       // ── PHASE 1 & 2: Two-Phase Onboarding Overlay ──
                       // Strictly inside ValueListenableBuilder. Never touches ArCoreView.
+                      // Target property compass only shown when _isNavigating is true
+                      // (user tapped a post and selected Navigate). Hidden by default
+                      // to prevent the placeholder NYC coords showing to non-NY users.
                       if (!_isDemoMode)
                         ArOnboardingOverlay(
-                          targetLat: _targetLat,
-                          targetLng: _targetLng,
-                          propertyName: _targetName,
+                          targetLat: _isNavigating ? _targetLat : null,
+                          targetLng: _isNavigating ? _targetLng : null,
+                          propertyName: _isNavigating ? _targetName : '',
                           isTracking: _hasVpsLock,
                           failureReason: _vioFailureReason,
                         ),

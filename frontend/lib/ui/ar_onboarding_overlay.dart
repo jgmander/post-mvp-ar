@@ -38,11 +38,11 @@ enum VioFailureReason {
 }
 
 class ArOnboardingOverlay extends StatefulWidget {
-  /// The real-world latitude of the target property.
-  final double targetLat;
+  /// The real-world latitude of the target property. Null hides the compass.
+  final double? targetLat;
 
-  /// The real-world longitude of the target property.
-  final double targetLng;
+  /// The real-world longitude of the target property. Null hides the compass.
+  final double? targetLng;
 
   /// The display name of the target property, shown in the compass label.
   final String propertyName;
@@ -56,8 +56,8 @@ class ArOnboardingOverlay extends StatefulWidget {
 
   const ArOnboardingOverlay({
     super.key,
-    required this.targetLat,
-    required this.targetLng,
+    this.targetLat,
+    this.targetLng,
     required this.propertyName,
     required this.isTracking,
     this.failureReason = VioFailureReason.none,
@@ -236,13 +236,14 @@ class _ArOnboardingOverlayState extends State<ArOnboardingOverlay>
   /// to point toward the target property, relative to device screen-up.
   double? _computeArrowRotationRadians() {
     if (_userPosition == null || _deviceHeading == null) return null;
+    if (widget.targetLat == null || widget.targetLng == null) return null;
 
-    // True bearing from user's GPS to the target property (0–360, clockwise from north)
+    // True bearing from user's GPS to the target property (0-360, clockwise from north)
     final trueBearing = Geolocator.bearingBetween(
       _userPosition!.latitude,
       _userPosition!.longitude,
-      widget.targetLat,
-      widget.targetLng,
+      widget.targetLat!,
+      widget.targetLng!,
     );
 
     // Delta = bearing to target minus where the phone is currently facing.
@@ -256,11 +257,12 @@ class _ArOnboardingOverlayState extends State<ArOnboardingOverlay>
 
   String _distanceLabel() {
     if (_userPosition == null) return '';
+    if (widget.targetLat == null || widget.targetLng == null) return '';
     final metres = Geolocator.distanceBetween(
       _userPosition!.latitude,
       _userPosition!.longitude,
-      widget.targetLat,
-      widget.targetLng,
+      widget.targetLat!,
+      widget.targetLng!,
     );
     if (metres < 1000) return '${metres.toStringAsFixed(0)}m away';
     return '${(metres / 1000).toStringAsFixed(1)}km away';

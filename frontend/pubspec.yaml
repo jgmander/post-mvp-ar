@@ -52,6 +52,7 @@ dependencies:
   sign_in_with_apple: ^8.0.0
   crypto: ^3.0.7
   shared_preferences: ^2.3.3
+  wakelock_plus: ^1.2.10
 
   google_maps_flutter_platform_interface: any
   firebase_core: any
