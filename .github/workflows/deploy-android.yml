@@ -8,12 +8,10 @@ on:
       - 'frontend/**'
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build_and_distribute:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: 'write'
       id-token: 'write'
