@@ -36,26 +36,26 @@ dependencies:
   cupertino_icons: ^1.0.8
   arcore_flutter_plugin:
     path: ../plugins/arcore_flutter_plugin
-  geolocator: ^14.0.2
+  geolocator: ^14.0.3
   http: ^1.6.0
   provider: ^6.1.5+1
   google_maps_flutter: ^2.9.0
   google_maps_flutter_android: ^2.14.0
   sensors_plus: ^7.0.0
-  share_plus: ^12.0.1
-  cloud_firestore: ^6.3.0
+  share_plus: ^13.1.0
+  cloud_firestore: ^6.6.0
   url_launcher: ^6.3.2
   flutter_compass: ^0.8.0
   geocoding: ^4.0.0
-  firebase_auth: ^6.5.1
+  firebase_auth: ^6.5.4
   google_sign_in: ^7.2.0
   sign_in_with_apple: ^8.0.0
   crypto: ^3.0.7
   shared_preferences: ^2.3.3
-  wakelock_plus: ^1.2.10
+  wakelock_plus: ^1.6.1
 
-  google_maps_flutter_platform_interface: any
-  firebase_core: any
+  google_maps_flutter_platform_interface: ^2.9.0
+  firebase_core: ^4.11.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

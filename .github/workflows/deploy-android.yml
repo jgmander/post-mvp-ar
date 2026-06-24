@@ -89,12 +89,16 @@ jobs:
         with:
           workload_identity_provider: '${{ secrets.WIF_PROVIDER }}'
           service_account: '${{ secrets.SA_EMAIL }}'
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       # ── Distribute APK to Dustin + internal testers via Firebase ──
       - name: Upload APK to Firebase App Distribution
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
         run: |
           firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk \
             --app ${{ secrets.FIREBASE_APP_ID }} \
@@ -102,7 +106,7 @@ jobs:
 
       # ── Upload AAB to Play Store Internal Track ──
       - name: Upload AAB to Play Store (Internal Track)
-        uses: r0adkll/upload-google-play@v1
+        uses: r0adkll/upload-google-play@v1.1.3
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
           packageName: com.post.spatial
