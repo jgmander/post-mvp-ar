@@ -152,6 +152,11 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
         setState(() => nearbyPosts = posts);
         _renderPosts();
       }
+      // Start the Firestore real-time listener immediately using GPS location.
+      // This is independent of VPS lock — listener receives cross-device post
+      // updates as soon as GPS is available. VPS is still required to actually
+      // render the terrain anchors, but data flows from this point on.
+      _startPostsListener(position.latitude, position.longitude);
     } catch (e) {
       print("AR background post load failed (non-fatal): $e");
     }
@@ -239,7 +244,7 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
         final pose = await arCoreController.getGeospatialPose();
         if (mounted) {
           setState(() => _currentPose = pose);
-          if (pose != null && pose['accuracy'] < 1.5) {
+          if (pose != null && pose['accuracy'] < 2.5) {
             _vpsScanSeconds = 0;
             if (!_hasVpsLock) {
               setState(() {
