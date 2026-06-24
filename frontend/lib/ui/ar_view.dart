@@ -33,6 +33,12 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
   Timer? _holdHapticTimer;
   Map<String, dynamic>? _currentPose;
 
+  // Firestore real-time listener for nearby posts.
+  // Started when VPS first locks (lat/lng known). Restarted if user
+  // moves to a different 6-char geohash cell (~1.2km boundary).
+  StreamSubscription<QuerySnapshot>? _postsSubscription;
+  String _currentGeohashPrefix = '';
+
   // Two-Phase Onboarding state
   bool _hasVpsLock = false;
   VioFailureReason _vioFailureReason = VioFailureReason.none;
@@ -131,6 +137,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
   }
 
   Future<void> _loadPostsInBackground() async {
+    // Cold-start fallback: fetch posts before VPS lock when we may not
+    // yet have a precise location. Once VPS locks, the real-time
+    // Firestore listener takes over and this is no longer called.
     try {
       Position? position = await Geolocator.getLastKnownPosition();
       position ??= Position(
@@ -148,6 +157,82 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
     }
   }
 
+  // ─── Real-Time Firestore Listener ──────────────────────────────
+
+  /// Minimal geohash encoder — produces an N-character geohash string
+  /// from a lat/lng pair. Used to compute the tile prefix for the
+  /// Firestore range query. Must match the precision used by the backend.
+  static const String _base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+
+  static String _geohashPrefix(double lat, double lng, int precision) {
+    var minLat = -90.0, maxLat = 90.0;
+    var minLng = -180.0, maxLng = 180.0;
+    final result = StringBuffer();
+    var hashVal = 0;
+    var bits = 0;
+    var isEven = true;
+
+    while (result.length < precision) {
+      final double mid;
+      if (isEven) {
+        mid = (minLng + maxLng) / 2;
+        if (lng > mid) { hashVal = (hashVal << 1) | 1; minLng = mid; }
+        else { hashVal <<= 1; maxLng = mid; }
+      } else {
+        mid = (minLat + maxLat) / 2;
+        if (lat > mid) { hashVal = (hashVal << 1) | 1; minLat = mid; }
+        else { hashVal <<= 1; maxLat = mid; }
+      }
+      isEven = !isEven;
+      if (bits == 4) {
+        result.write(_base32[hashVal]);
+        hashVal = 0;
+        bits = 0;
+      } else {
+        bits++;
+      }
+    }
+    return result.toString();
+  }
+
+  /// Starts (or restarts) a Firestore real-time listener for posts
+  /// within the 6-char geohash tile covering [lat, lng].
+  /// A 6-char cell is ~1.2km x 0.6km — large enough for AR range,
+  /// small enough to keep fan-out bounded at scale.
+  /// Upgradeable to 9 x 7-char tile listeners when density requires it.
+  void _startPostsListener(double lat, double lng) {
+    final prefix = _geohashPrefix(lat, lng, 6);
+    if (prefix == _currentGeohashPrefix) return; // Already listening to this cell
+
+    _postsSubscription?.cancel();
+    _currentGeohashPrefix = prefix;
+    final upperBound = prefix + '\uf8ff'; // Matches all strings starting with prefix
+    final now = Timestamp.now();
+
+    print('AR: Starting Firestore listener on geohash prefix "$prefix"');
+
+    _postsSubscription = FirebaseFirestore.instance
+        .collection('posts')
+        .where('geohash', isGreaterThanOrEqualTo: prefix)
+        .where('geohash', isLessThanOrEqualTo: upperBound)
+        .where('expires_at', isGreaterThan: now)
+        .snapshots()
+        .listen(
+      (QuerySnapshot snapshot) {
+        if (!mounted) return;
+        final livePosts = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return Post.fromJson({...data, 'id': doc.id});
+        }).where((p) => !p.isFlagged).toList();
+
+        setState(() => nearbyPosts = livePosts);
+        _renderPosts();
+        print('AR: Firestore push — ${livePosts.length} posts in cell "$prefix"');
+      },
+      onError: (e) => print('AR: Firestore listener error (non-fatal): $e'),
+    );
+  }
+
   Future<void> _updateVPS() async {
     if (_arCoreInitialized) {
       try {
@@ -161,6 +246,18 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                 _hasVpsLock = true;
                 _vioFailureReason = VioFailureReason.none;
               });
+              // VPS just locked — we now have a precise location.
+              // Start the real-time Firestore listener. This replaces
+              // the one-shot _loadPostsInBackground for all future updates.
+              final lat = pose['latitude'] as double;
+              final lng = pose['longitude'] as double;
+              _startPostsListener(lat, lng);
+            } else {
+              // Already locked — check if user moved to a new geohash cell
+              // and restart listener if so (handles long sessions with movement).
+              final lat = pose['latitude'] as double;
+              final lng = pose['longitude'] as double;
+              _startPostsListener(lat, lng);
             }
             if (!_postsRendered) {
               print('VPS Lock Achieved: Rendering ${nearbyPosts.length} persistent posts');
@@ -555,12 +652,9 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
                                   _renderedPostIds.add(node.name!);
                                 });
 
-                                // Refresh nearby posts from backend after 2s so this
-                                // post and any other recently-dropped posts appear
-                                // without requiring an app restart.
-                                Future.delayed(const Duration(seconds: 2), () {
-                                  if (mounted) _loadPostsInBackground();
-                                });
+                                // The real-time Firestore listener will automatically
+                                // push this new post to all nearby devices within ~1s.
+                                // No manual refresh needed.
 
                                 Navigator.pop(sheetContext);
                                 
@@ -1203,6 +1297,8 @@ class _ArViewState extends State<ArView> with TickerProviderStateMixin, WidgetsB
     _vpsTimer?.cancel();
     _holdHapticTimer?.cancel();
     _recordingTimer?.cancel();
+    // Cancel the Firestore real-time listener.
+    _postsSubscription?.cancel();
     _pulseController.dispose();
     _reticleGlowController.dispose();
     if (_arCoreInitialized) arCoreController.dispose();
