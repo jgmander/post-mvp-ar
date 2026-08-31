@@ -78,3 +78,13 @@ Adding an ar_logs Firestore collection is in the Sprint 8 backlog.
 ## RULE 7: CI/CD bot commit filter — do not remove
 
 Xcode Cloud file path filter (frontend/lib/ and frontend/ios/) prevents CI bot commits (auto-bump, deploy timestamp) from triggering cascading iOS builds. Do not remove or widen this filter.
+
+---
+
+## RULE 8: Podfile.lock synchronization on dependency updates
+
+Whenever Flutter dependencies (especially Firebase SDK, Google Maps, or native plugins) are updated in `pubspec.yaml`:
+1. Always run `flutter pub get` and `cd frontend/ios && pod update <PodName>` (or `pod install --repo-update`) locally.
+2. Verify and commit the resulting `frontend/ios/Podfile.lock`.
+3. Xcode Cloud runs `pod install` in `ci_post_clone.sh` which strictly adheres to `Podfile.lock`. Out-of-sync snapshot constraints (e.g., `Firebase/CoreOnly` version mismatches) will fail the CI build immediately.
+
