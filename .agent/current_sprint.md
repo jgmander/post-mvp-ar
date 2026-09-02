@@ -21,14 +21,11 @@ Finalize remaining administrative tasks, store listings/screenshots, and submit 
 - iOS: TestFlight Build (managed via Xcode Cloud)
 
 ## Pending for Public Launch (Administrative & Store Listings)
-- [ ] **Apple App Store Review Package (CRITICAL — resolves Guideline 2.1 & 2.3.3):**
-  - **Reviewer Demo Video Link:** Host a 1–2 min physical iOS screen recording (YouTube Unlisted / Google Drive) showing full flow: permission prompts -> 2D Map -> Outdoor VPS AR scan & lock -> Dropping an AR pin -> Viewing posts.
-  - **App Review Notes:** Insert explanation that Post is an outdoor AR app requiring physical building facades with Google Street View coverage, with the demo video URL.
-  - **Real UI Screenshots:** Pure device UI captures (iPhone 6.7"/6.5" and iPad 13" if enabled) without stylized promotional borders.
-  - **Review Account / Sign-In:** Clarify anonymous/guest mode or provide test credentials.
+- [x] **Apple App Store Review Submission (Build 66):** SUBMITTED on 2026-09-01 (Status: *Waiting for Review*). Included demo video link, updated reviewer notes on outdoor VPS localization, 4 native-res UI screenshots (iPhone + iPad), 13+ age rating, and live Terms & Privacy URLs.
 - [ ] **Google Play Console (Android):** Finalize Target Audience declaration, upload live screenshots, and promote from Internal Track (`1.0.0+40`) to Production review.
 - [ ] **Custom Domain & Email:** Install `get-post.co` / `spatial-labs.net` and forward `safety@get-post.co` / `report@get-post.co` -> `jgmander@gmail.com`.
 - [ ] **Final Smoke Test:** Walkthrough verification on iOS and Android devices in outdoor VPS-enabled area.
+
 
 
 ## Fast-Follow / Backlog Ideas (Post-Launch)
