@@ -63,22 +63,20 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             isDebug = dict["debug"] as? Bool ?? false
         }
 
-        // Broad capability check instead of hardware whitelist
-        let isIPad = UIDevice.current.userInterfaceIdiom == .pad
         let isARKitSupported = ARWorldTrackingConfiguration.isSupported
 
-        if isARKitSupported && !isIPad {
-            // Full iPhone AR experience
+        if isARKitSupported {
+            // ARKit supported experience
             self.arView = ARSCNView(frame: frame)
             self.isARSupported = true
             print("DEBUG: [Post] Creating ARSCNView and calling setupARView()")
             setupARView()
         } else {
-            // iPad / unsupported device — Demo Mode with graceful fallback
+            // Unsupported hardware fallback
             self.isARSupported = false
-            let reason = isIPad ? "iPad detected. Running in Demo Mode — spatial anchoring requires iPhone with GPS." : "This device does not fully support AR features."
-            setupFallbackView(frame: frame, reason: reason, isDemoMode: true)
-            debugLog("Demo Mode activated: \(reason)")
+            let reason = "This device does not support AR features."
+            setupFallbackView(frame: frame, reason: reason, isDemoMode: false)
+            debugLog("AR Unsupported: \(reason)")
 
             DispatchQueue.main.async {
                 self.methodChannel.invokeMethod("onCompatibilityError", arguments: [

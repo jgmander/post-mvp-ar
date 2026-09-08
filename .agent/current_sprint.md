@@ -21,7 +21,13 @@ Finalize remaining administrative tasks, store listings/screenshots, and submit 
 - iOS: TestFlight Build (managed via Xcode Cloud)
 
 ## Pending for Public Launch (Administrative & Store Listings)
-- [x] **Apple App Store Review Submission (Build 66):** SUBMITTED on 2026-09-01 (Status: *Waiting for Review*). Included demo video link, updated reviewer notes on outdoor VPS localization, 4 native-res UI screenshots (iPhone + iPad), 13+ age rating, and live Terms & Privacy URLs.
+- [x] **Apple App Store Review (Build 66 Rejection Analysis - 2026-09-04):**
+  - **Issue:** Apple tested on an iPad Air 11-inch (M3) and rejected under Guideline 2.1(a) ("Main feature is unavailable") because `TARGETED_DEVICE_FAMILY = "1,2"` caused Apple to test on iPad, where `ArCoreViewIOS.swift` was hardcoded with `!isIPad` to display "Spatial Features Not Available - use on iPhone". Apple also re-requested a demo video under Guideline 2.1 showing first-time permission prompts.
+  - **Fix Applied:** Changed `TARGETED_DEVICE_FAMILY` from `"1,2"` to `1` (iPhone only), removed `UISupportedInterfaceOrientations~ipad` from `Info.plist`, and removed artificial `!isIPad` check in `ArCoreViewIOS.swift`.
+- [ ] **Apple App Store Resubmission (Build 67):**
+  - Trigger Xcode Cloud Build 67 with iPhone-only target.
+  - Re-record 60-second fresh iPhone demo video showing: App install -> Camera & Location permission popups -> 2D Map -> Outdoor VPS lock -> Dropping an AR pin -> Interacting with post.
+  - Remove iPad screenshot tab in App Store Connect, attach Build 67, update video link, and resubmit.
 - [ ] **Google Play Console (Android):** Finalize Target Audience declaration, upload live screenshots, and promote from Internal Track (`1.0.0+40`) to Production review.
 - [ ] **Custom Domain & Email:** Install `get-post.co` / `spatial-labs.net` and forward `safety@get-post.co` / `report@get-post.co` -> `jgmander@gmail.com`.
 - [ ] **Final Smoke Test:** Walkthrough verification on iOS and Android devices in outdoor VPS-enabled area.
