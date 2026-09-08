@@ -71,6 +71,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 	<key>io.flutter.embedded_views_preview</key>
 	<true/>
 	<key>CFBundleURLTypes</key>
