@@ -21,13 +21,13 @@ Finalize remaining administrative tasks, store listings/screenshots, and submit 
 - iOS: TestFlight Build (managed via Xcode Cloud)
 
 ## Pending for Public Launch (Administrative & Store Listings)
-- [x] **Apple App Store Review (Build 66 Rejection Analysis - 2026-09-04):**
-  - **Issue:** Apple tested on an iPad Air 11-inch (M3) and rejected under Guideline 2.1(a) ("Main feature is unavailable") because `TARGETED_DEVICE_FAMILY = "1,2"` caused Apple to test on iPad, where `ArCoreViewIOS.swift` was hardcoded with `!isIPad` to display "Spatial Features Not Available - use on iPhone". Apple also re-requested a demo video under Guideline 2.1 showing first-time permission prompts.
-  - **Fix Applied:** Changed `TARGETED_DEVICE_FAMILY` from `"1,2"` to `1` (iPhone only), removed `UISupportedInterfaceOrientations~ipad` from `Info.plist`, and removed artificial `!isIPad` check in `ArCoreViewIOS.swift`.
-- [ ] **Apple App Store Resubmission (Build 68):**
-  - Build 68 actively compiling on Xcode Cloud (iPhone-only target with valid Info.plist).
-  - Re-record 60-second fresh iPhone demo video showing: App install -> Camera & Location permission popups -> 2D Map -> Outdoor VPS lock -> Dropping an AR pin -> Interacting with post.
-  - In App Store Connect: Select Build 68, update video link, remove iPad screenshots (since now iPhone-only), and resubmit.
+- [x] **Apple App Store Resubmission (Build 69):**
+  - Compiled and validated Build 69 (iPhone-only target, XML-fixed Info.plist).
+  - Attached Build 69 in App Store Connect.
+  - Updated App Review Notes with new physical iPhone 16 Pro demo video (`ScreenRecording_09-08-2026 17-10-28_1.MP4`) showing Camera permission prompt, outdoor building VPS lock (1.0m), and 3D AR balloon placement.
+  - Attached native iOS location permission prompt screenshot (`location_prompt.png`).
+  - Removed iPad screenshots (iPhone-only target).
+  - Resubmission queued (Status: *Ready for Review* / *Waiting for Review*).
 - [ ] **Google Play Console (Android):** Finalize Target Audience declaration, upload live screenshots, and promote from Internal Track (`1.0.0+40`) to Production review.
 - [ ] **Custom Domain & Email:** Install `get-post.co` / `spatial-labs.net` and forward `safety@get-post.co` / `report@get-post.co` -> `jgmander@gmail.com`.
 - [ ] **Final Smoke Test:** Walkthrough verification on iOS and Android devices in outdoor VPS-enabled area.
