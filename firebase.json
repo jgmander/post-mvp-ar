@@ -30,6 +30,10 @@
       {
         "source": "/child-safety",
         "destination": "/child-safety.html"
+      },
+      {
+        "source": "/scan",
+        "destination": "/scan.html"
       }
     ],
     "headers": [

@@ -21,14 +21,12 @@ Finalize remaining administrative tasks, store listings/screenshots, and submit 
 - iOS: TestFlight Build (managed via Xcode Cloud)
 
 ## Pending for Public Launch (Administrative & Store Listings)
-- [x] **Apple App Store Resubmission (Build 69):**
-  - Compiled and validated Build 69 (iPhone-only target, XML-fixed Info.plist).
-  - Attached Build 69 in App Store Connect.
-  - Updated App Review Notes with new physical iPhone 16 Pro demo video (`ScreenRecording_09-08-2026 17-10-28_1.MP4`) showing Camera permission prompt, outdoor building VPS lock (1.0m), and 3D AR balloon placement.
-  - Attached native iOS location permission prompt screenshot (`location_prompt.png`).
-  - Removed iPad screenshots (iPhone-only target).
-  - Resubmission queued (Status: *Ready for Review* / *Waiting for Review*).
-- [ ] **Google Play Console (Android):** Finalize Target Audience declaration, upload live screenshots, and promote from Internal Track (`1.0.0+40`) to Production review.
+- [x] **Apple App Store Review (APPROVED! - 2026-09-11):**
+  - Post Spatial 1.0 (Build 69) **APPROVED** by Apple App Review!
+  - App Store URL: `https://apps.apple.com/app/post-spatial/id6760303644`
+  - Current status: *Pending Developer Release* (ready to click "Release This Version").
+- [ ] **Release Post Spatial 1.0 to App Store:** Click "Release This Version" in App Store Connect.
+- [ ] **Google Play Console (Android):** Finalize Target Audience declaration, upload live screenshots, and promote from Internal Track (`1.0.0+43`) to Production review.
 - [ ] **Custom Domain & Email:** Install `get-post.co` / `spatial-labs.net` and forward `safety@get-post.co` / `report@get-post.co` -> `jgmander@gmail.com`.
 - [ ] **Final Smoke Test:** Walkthrough verification on iOS and Android devices in outdoor VPS-enabled area.
 

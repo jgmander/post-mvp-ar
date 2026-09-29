@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Post Spatial — Smart Scan</title>
+  <meta name="description" content="Discover spatial notes, memories, and announcements anchored to this physical space in Augmented Reality." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2300e5ff'/><text y='22' x='6' font-size='18'>📍</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script>
+    // ── Instant Device Detection & Routing ──
+    (function() {
+      var ua = navigator.userAgent || navigator.vendor || window.opera;
+      var iosLink = "https://apps.apple.com/app/post-spatial/id6760303644";
+      var androidLink = "https://play.google.com/store/apps/details?id=com.post.spatial";
+
+      // Detect iOS (iPhone, iPad, iPod)
+      if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) {
+        window.location.replace(iosLink);
+        return;
+      }
+
+      // Detect Android
+      if (/android/i.test(ua)) {
+        window.location.replace(androidLink);
+        return;
+      }
+    })();
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #0D1220;
+      color: #F0F4FF;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow-x: hidden;
+    }
+    .background-glow {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(0, 229, 255, 0.12) 0%, rgba(179, 136, 255, 0.08) 50%, transparent 70%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .card {
+      position: relative;
+      z-index: 1;
+      background: rgba(22, 27, 37, 0.85);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-radius: 28px;
+      padding: 48px 36px;
+      max-width: 460px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 229, 255, 0.1);
+      backdrop-filter: blur(16px);
+    }
+    .logo-badge {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 24px;
+      background: #141F35;
+      border: 2px solid #00E5FF;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px rgba(0, 229, 255, 0.35);
+    }
+    .logo-badge img {
+      width: 52px;
+      height: 52px;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 12px;
+      color: #F0F4FF;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #00E5FF 0%, #B388FF 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #8896B0;
+      margin-bottom: 32px;
+    }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 24px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 15px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-ios {
+      background: #F0F4FF;
+      color: #0D1220;
+    }
+    .btn-ios:hover {
+      background: #FFFFFF;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(240, 244, 255, 0.25);
+    }
+    .btn-android {
+      background: #16223B;
+      color: #00E5FF;
+      border: 1px solid rgba(0, 229, 255, 0.35);
+    }
+    .btn-android:hover {
+      background: #1C2D50;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 229, 255, 0.2);
+    }
+    .footer-note {
+      margin-top: 28px;
+      font-size: 12px;
+      color: #4A607A;
+    }
+  </style>
+</head>
+<body>
+  <div class="background-glow"></div>
+  <div class="card">
+    <div class="logo-badge">
+      <img src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%2300e5ff'/><text y='22' x='6' font-size='18'>📍</text></svg>" alt="Post Spatial Logo" />
+    </div>
+    <h1>Look Closer. <br /><span class="gradient-text">Post Spatial</span></h1>
+    <p>This physical space holds digital notes, art, and messages anchored in Augmented Reality. Download the app to view what's floating around you.</p>
+
+    <div class="actions">
+      <a href="https://apps.apple.com/app/post-spatial/id6760303644" class="btn btn-ios">
+        <span>🍎</span> Download on App Store
+      </a>
+      <a href="https://play.google.com/store/apps/details?id=com.post.spatial" class="btn btn-android">
+        <span>▶</span> Get it on Google Play
+      </a>
+    </div>
+
+    <div class="footer-note">
+      Available on iOS & Android • Powered by Google VPS
+    </div>
+  </div>
+</body>
+</html>
