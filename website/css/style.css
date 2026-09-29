@@ -58,7 +58,7 @@ nav {
   width: 32px; height: 32px; border-radius: 8px;
   background: linear-gradient(135deg, var(--cyan), var(--blue));
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
+  overflow: hidden;
 }
 .nav-logo-text { font-weight: 700; font-size: 1.1rem; color: var(--text); }
 .nav-links { display: flex; align-items: center; gap: 32px; }
@@ -115,7 +115,17 @@ nav {
   transition: border-color 0.2s, transform 0.2s;
 }
 .btn-store:hover { border-color: var(--cyan); transform: translateY(-2px); }
-.btn-store .store-icon { font-size: 1.6rem; }
+.btn-store .store-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+.btn-store .store-icon svg {
+  display: block;
+}
 .btn-store .store-text { display: flex; flex-direction: column; }
 .btn-store .store-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .btn-store .store-name { font-size: 0.95rem; font-weight: 600; }
