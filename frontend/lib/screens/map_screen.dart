@@ -418,7 +418,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 const Icon(Icons.circle, color: Colors.white, size: 6),
                 const SizedBox(width: 5),
                 Text(
-                  post.isLive24h ? '24H LIVE' : 'PINNED TIP',
+                  post.isLive24h ? 'TODAY' : 'FOREVER',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 10,
@@ -997,7 +997,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       children: [
                         Expanded(
                           child: ChoiceChip(
-                            label: const Center(child: Text('📌 Permanent')),
+                            label: const Center(child: Text('📌 Forever')),
                             selected: isPermanent,
                             onSelected: isSaved || isSaving
                                 ? null
@@ -1015,7 +1015,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                         const SizedBox(width: 10),
                         Expanded(
                           child: ChoiceChip(
-                            label: const Center(child: Text('⚡ 24h Live')),
+                            label: const Center(child: Text('⚡ Today')),
                             selected: !isPermanent,
                             onSelected: isSaved || isSaving
                                 ? null
@@ -1328,7 +1328,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
                         String countdown;
                         if (isPerm) {
-                          countdown = '📌 Permanent Tip';
+                          countdown = '📌 Forever';
                         } else {
                           final diff = expiresAt.difference(DateTime.now());
                           if (diff.isNegative) {
@@ -1336,7 +1336,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           } else if (diff.inHours >= 48) {
                             countdown = 'Active · ${diff.inDays}d left';
                           } else {
-                            countdown = '⚡ Live · ${diff.inHours}h ${diff.inMinutes.remainder(60)}m left';
+                            countdown = '⚡ Today · ${diff.inHours}h ${diff.inMinutes.remainder(60)}m left';
                           }
                         }
 

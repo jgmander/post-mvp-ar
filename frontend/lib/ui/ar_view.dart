@@ -717,13 +717,13 @@ class _ArViewState extends State<ArView>
                     ),
                     const SizedBox(height: 12),
 
-                    // Lifespan Toggle: Permanent Tip vs 24h Live Moment
+                    // Lifespan Toggle: Forever vs Today
                     if (isSignedIn)
                       Row(
                         children: [
                           Expanded(
                             child: ChoiceChip(
-                              label: const Center(child: Text('📌 Permanent')),
+                              label: const Center(child: Text('📌 Forever')),
                               selected: isPermanent,
                               onSelected: (val) {
                                 if (val) setModalState(() => isPermanent = true);
@@ -739,7 +739,7 @@ class _ArViewState extends State<ArView>
                           const SizedBox(width: 12),
                           Expanded(
                             child: ChoiceChip(
-                              label: const Center(child: Text('⚡ 24h Live')),
+                              label: const Center(child: Text('⚡ Today')),
                               selected: !isPermanent,
                               onSelected: (val) {
                                 if (val) setModalState(() => isPermanent = false);
@@ -763,7 +763,7 @@ class _ArViewState extends State<ArView>
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text(
-                          '⚡ Guest posts stay live for 24h (sign in right after to keep forever)',
+                          '⚡ Guest posts stay live for Today (sign in right after to keep Forever)',
                           style: TextStyle(color: Colors.white60, fontSize: 12),
                           textAlign: TextAlign.center,
                         ),
@@ -917,8 +917,8 @@ class _ArViewState extends State<ArView>
                                                       const SizedBox(height: 14),
                                                       Text(
                                                         effectivePermanent
-                                                            ? 'PINNED HERE'
-                                                            : 'LIVE FOR 24H',
+                                                            ? 'PINNED FOREVER'
+                                                            : 'LIVE FOR TODAY',
                                                         style: const TextStyle(
                                                           color: Colors.white,
                                                           fontSize: 20,
@@ -993,8 +993,8 @@ class _ArViewState extends State<ArView>
                               ),
                               child: Text(
                                 isSignedIn && isPermanent
-                                    ? '📌 Pin Permanently'
-                                    : '⚡ Drop 24h Post',
+                                    ? '📌 Post Forever'
+                                    : '⚡ Post for Today',
                                 style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -1117,7 +1117,7 @@ class _ArViewState extends State<ArView>
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      post.isLive24h ? '⚡ 24h Live' : '📌 Pinned Tip',
+                      post.isLive24h ? '⚡ Today' : '📌 Forever',
                       style: TextStyle(
                         color: post.isLive24h ? AppColors.liveAmber : Colors.cyanAccent,
                         fontSize: 11,
