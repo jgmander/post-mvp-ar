@@ -29,6 +29,7 @@ import CoreLocation
   ) -> Bool {
     let apiKey = Bundle.main.object(forInfoDictionaryKey: "MAPS_API_KEY") as? String ?? ""
     GMSServices.provideAPIKey(apiKey)
+    GMSServices.addInternalUsageAttributionID("gmp_git_agentskills_v1")
     print("DEBUG: [Post] AppDelegate GMSServices.provideAPIKey initialized for iOS with dynamic key")
     
     // Must call super first — this initializes the Flutter engine and sets window.rootViewController
