@@ -1,6 +1,6 @@
 import os
 import re
-import geohash
+from services import geohash_util as geohash
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from google.cloud import firestore

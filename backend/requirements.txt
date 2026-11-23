@@ -4,6 +4,5 @@ google-cloud-firestore
 google-genai
 pydantic
 google-cloud-secret-manager
-python-geohash==0.8.5
 firebase-admin
 
