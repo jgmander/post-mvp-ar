@@ -31,9 +31,10 @@ jobs:
       - name: Auto-bump version code
         working-directory: ${{ github.workspace }}
         run: |
+          SEMVER=$(grep "^version:" frontend/pubspec.yaml | sed -E 's/^version: ([0-9]+\.[0-9]+\.[0-9]+)\+.*/\1/')
           CURRENT=$(grep "^version:" frontend/pubspec.yaml | grep -o '+[0-9]*' | tr -d '+')
           NEXT=$((CURRENT + 1))
-          sed -i "s/version: 1.0.0+${CURRENT}/version: 1.0.0+${NEXT}/" frontend/pubspec.yaml
+          sed -i "s/version: ${SEMVER}+${CURRENT}/version: ${SEMVER}+${NEXT}/" frontend/pubspec.yaml
           echo "VERSION_CODE=${NEXT}" >> $GITHUB_ENV
           git config user.email "ci@post.co"
           git config user.name "GitHub Actions"
