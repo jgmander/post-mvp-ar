@@ -1,7 +1,16 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+PERMANENT_EXPIRES_AT = datetime(2099, 12, 31, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def _default_expires_at() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(hours=24)
+
+
 class PostCreate(BaseModel):
+    client_post_id: Optional[str] = Field(default=None, max_length=64)
     latitude: float
     longitude: float
     altitude: float
@@ -13,8 +22,20 @@ class PostCreate(BaseModel):
     reach: int = Field(default=0, description="The intended reach distance or amount")
     place_name: Optional[str] = None
     place_category: Optional[str] = None
-    expires_at: Optional[datetime] = Field(default_factory=lambda: datetime.utcnow() + timedelta(hours=24))
+    expires_at: Optional[datetime] = Field(default_factory=_default_expires_at)
+    is_permanent: bool = False
+    anchor_surface: Optional[str] = None
+    action_url: Optional[str] = None
     is_flagged: bool = False
+
+
+class PostUpdate(BaseModel):
+    caption: Optional[str] = None
+    is_permanent: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+    action_url: Optional[str] = None
+    claim_from_uid: Optional[str] = None
+
 
 class PostResponse(PostCreate):
     id: str
@@ -24,4 +45,5 @@ class PostResponse(PostCreate):
     cta_action: Optional[str] = None
     is_safe: bool = True
     expires_at: Optional[datetime] = None
+    is_permanent: bool = False
     is_flagged: bool = False

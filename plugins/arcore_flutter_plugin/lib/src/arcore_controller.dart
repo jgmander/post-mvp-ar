@@ -19,6 +19,7 @@ typedef ArCoreAugmentedImageTrackingHandler = void Function(
     ArCoreAugmentedImage);
 typedef RooftopAnchorResolvedHandler = void Function(String name, bool success, String? state);
 typedef TerrainAnchorResolvedHandler = void Function(String name, bool success, String? state);
+typedef CenterTargetChangedHandler = void Function(Map<String, dynamic> target);
 
 const UTILS_CHANNEL_NAME = 'arcore_flutter_plugin/utils';
 
@@ -63,6 +64,7 @@ class ArCoreController {
   RooftopAnchorResolvedHandler? onRooftopAnchorResolved;
   TerrainAnchorResolvedHandler? onTerrainAnchorResolved;
   BoolResultHandler? onCenterHitBuilding;
+  CenterTargetChangedHandler? onCenterTargetChanged;
   Function(Map<String, dynamic>)? onCompatibilityError;
   String trackingState = '';
   ArCoreAugmentedImageTrackingHandler? onTrackingImage;
@@ -88,7 +90,7 @@ class ArCoreController {
   }
 
   Future<dynamic> _handleMethodCalls(MethodCall call) async {
-    if (debug ?? true) {
+    if (debug ?? false) {
       print('_platformCallHandler call ${call.method} ${call.arguments}');
     }
 
@@ -124,13 +126,19 @@ class ArCoreController {
         }
         break;
       case 'onCenterHitBuilding':
-        if (onCenterHitBuilding != null) {
-          // Handle both raw bool (iOS) and Map (Android) argument formats
-          if (call.arguments is bool) {
-            onCenterHitBuilding!(call.arguments as bool);
-          } else if (call.arguments is Map) {
-            final args = call.arguments as Map<dynamic, dynamic>;
-            onCenterHitBuilding!(args['isBuilding'] as bool);
+        if (call.arguments is bool) {
+          final isBuilding = call.arguments as bool;
+          if (onCenterHitBuilding != null) {
+            onCenterHitBuilding!(isBuilding);
+          }
+        } else if (call.arguments is Map) {
+          final args = Map<String, dynamic>.from(call.arguments as Map);
+          final isBuilding = args['isBuilding'] == true;
+          if (onCenterHitBuilding != null) {
+            onCenterHitBuilding!(isBuilding);
+          }
+          if (onCenterTargetChanged != null) {
+            onCenterTargetChanged!(args);
           }
         }
         break;
@@ -231,7 +239,23 @@ class ArCoreController {
         return Map<String, dynamic>.from(result);
       }
     } catch (e) {
-      if (debug ?? true) print('Geospatial warning: $e');
+      if (debug ?? false) print('Geospatial warning: $e');
+    }
+    return null;
+  }
+
+  /// Performs an immediate raycast from the center crosshair against
+  /// Google Streetscape Geometry (buildings + terrain up to 50m) and
+  /// close-range physical surfaces (<= 8m), returning target coordinates
+  /// and gravity-aligned terrain-relative height.
+  Future<Map<String, dynamic>?> raycastCenter() async {
+    try {
+      final result = await _channel.invokeMethod('raycastCenter');
+      if (result != null && result is Map) {
+        return Map<String, dynamic>.from(result);
+      }
+    } catch (e) {
+      if (debug ?? false) print('raycastCenter warning: $e');
     }
     return null;
   }
@@ -249,24 +273,28 @@ class ArCoreController {
   }
 
   Future<void> resolveAnchorOnRooftopAsync(ArCoreNode node, double latitude, double longitude, double altitude,
-      {String? parentNodeName}) {
+      {String? parentNodeName, String? label, bool isLive24h = false}) {
     final params = _addParentNodeNameToParams(node.toMap(), parentNodeName);
     if (params != null) {
       params['latitude'] = latitude;
       params['longitude'] = longitude;
       params['altitude'] = altitude; // Above roof
+      if (label != null && label.isNotEmpty) params['label'] = label;
+      params['isLive24h'] = isLive24h;
     }
     _addListeners(node);
     return _channel.invokeMethod('resolveAnchorOnRooftopAsync', params);
   }
 
   Future<void> resolveAnchorOnTerrainAsync(ArCoreNode node, double latitude, double longitude, double altitude,
-      {String? parentNodeName}) {
+      {String? parentNodeName, String? label, bool isLive24h = false}) {
     final params = _addParentNodeNameToParams(node.toMap(), parentNodeName);
     if (params != null) {
       params['latitude'] = latitude;
       params['longitude'] = longitude;
       params['altitude'] = altitude; // Above terrain
+      if (label != null && label.isNotEmpty) params['label'] = label;
+      params['isLive24h'] = isLive24h;
     }
     _addListeners(node);
     return _channel.invokeMethod('resolveAnchorOnTerrainAsync', params);

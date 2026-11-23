@@ -4,12 +4,19 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
+import android.text.TextUtils
 import android.util.Log
+import android.util.TypedValue
 import android.view.GestureDetector
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.widget.TextView
 import android.widget.Toast
 import com.difrancescogianmarco.arcore_flutter_plugin.flutter_models.FlutterArCoreHitTestResult
 import com.difrancescogianmarco.arcore_flutter_plugin.flutter_models.FlutterArCoreNode
@@ -21,8 +28,13 @@ import com.google.ar.core.exceptions.CameraNotAvailableException
 import com.google.ar.core.exceptions.UnavailableException
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
 import com.google.ar.sceneform.*
+import com.google.ar.sceneform.math.Quaternion
+import com.google.ar.sceneform.math.Vector3
+import com.google.ar.sceneform.rendering.MaterialFactory
 import com.google.ar.sceneform.rendering.ModelRenderable
+import com.google.ar.sceneform.rendering.ShapeFactory
 import com.google.ar.sceneform.rendering.Texture
+import com.google.ar.sceneform.rendering.ViewRenderable
 import com.google.ar.sceneform.ux.AugmentedFaceNode
 import io.flutter.app.FlutterApplication
 import io.flutter.plugin.common.BinaryMessenger
@@ -54,6 +66,10 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
     private var sceneUpdateListener: Scene.OnUpdateListener
     private var faceSceneUpdateListener: Scene.OnUpdateListener
     private var lastCenterHitBuilding: Boolean = false
+    private var lastCenterSummaryKey: String = ""
+    private var latestCenterTarget: HashMap<String, Any>? = null
+    private var frameCounter: Int = 0
+    private val labelNodeMeta = HashMap<String, Pair<Node, Float>>()
 
     //AUGMENTEDFACE
     private var faceRegionsRenderable: ModelRenderable? = null
@@ -86,19 +102,45 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
             }
 
             arSceneView?.let { view ->
-                val hitList = frame.hitTest(view.width / 2f, view.height / 2f)
-                var hitBuilding = false
-                for (hit in hitList) {
-                    val trackable = hit.trackable
-                    if (trackable is StreetscapeGeometry && trackable.type == StreetscapeGeometry.Type.BUILDING) {
-                        hitBuilding = true
-                        break
+                frameCounter += 1
+                if (frameCounter % 10 == 0) {
+                    val target = performCenterRaycast(frame, view)
+                    if (target != null) {
+                        latestCenterTarget = target
+                        val surfaceType = target["surfaceType"] as? String ?: "none"
+                        val distVal = (target["distance"] as? Double) ?: 0.0
+                        val summaryKey = "${surfaceType}_${Math.round(distVal)}"
+                        if (summaryKey != lastCenterSummaryKey) {
+                            lastCenterSummaryKey = summaryKey
+                            lastCenterHitBuilding = (target["isBuilding"] as? Boolean) ?: false
+                            activity.runOnUiThread {
+                                methodChannel.invokeMethod("onCenterHitBuilding", target)
+                            }
+                        }
                     }
                 }
-                if (hitBuilding != lastCenterHitBuilding) {
-                    lastCenterHitBuilding = hitBuilding
-                    activity.runOnUiThread {
-                        methodChannel.invokeMethod("onCenterHitBuilding", mapOf("isBuilding" to hitBuilding))
+
+                // Billboard + proximity LOD for floating 3D caption pills
+                val camPos = view.scene.camera.worldPosition
+                for ((_, pair) in labelNodeMeta) {
+                    val labelNode = pair.first
+                    val maxDist = pair.second
+                    val parent = labelNode.parent
+                    if (parent == null) continue
+                    val nodePos = parent.worldPosition
+                    val dx = camPos.x - nodePos.x
+                    val dy = camPos.y - nodePos.y
+                    val dz = camPos.z - nodePos.z
+                    val dist = Math.sqrt((dx * dx + dy * dy + dz * dz).toDouble()).toFloat()
+                    val shouldShow = dist <= maxDist
+                    if (labelNode.isEnabled != shouldShow) {
+                        labelNode.isEnabled = shouldShow
+                    }
+                    if (shouldShow) {
+                        val lookVec = Vector3(dx, 0f, dz)
+                        if (lookVec.length() > 0.01f) {
+                            labelNode.worldRotation = Quaternion.lookRotation(lookVec.normalized(), Vector3.up())
+                        }
                     }
                 }
             }
@@ -268,6 +310,21 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
             "getGeospatialPose" -> {
                 debugLog(" getGeospatialPose")
                 getGeospatialPose(call, result)
+            }
+            "raycastCenter" -> {
+                val frame = arSceneView?.arFrame
+                val view = arSceneView
+                if (frame != null && view != null && frame.camera.trackingState == TrackingState.TRACKING) {
+                    val fresh = performCenterRaycast(frame, view)
+                    if (fresh != null) {
+                        latestCenterTarget = fresh
+                        result.success(fresh)
+                    } else {
+                        result.success(latestCenterTarget)
+                    }
+                } else {
+                    result.success(latestCenterTarget)
+                }
             }
             "addEarthAnchorNode" -> {
                 debugLog(" addEarthAnchorNode")
@@ -540,6 +597,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
     }
 
     fun removeNode(name: String, result: MethodChannel.Result) {
+        labelNodeMeta.remove(name)
         val node = arSceneView?.scene?.findByName(name)
         if (node != null) {
             arSceneView?.scene?.removeChild(node);
@@ -549,14 +607,196 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
         result.success(null)
     }
 
+    private fun performCenterRaycast(frame: Frame, view: ArSceneView): HashMap<String, Any>? {
+        val earth = view.session?.earth ?: return null
+        if (earth.trackingState != TrackingState.TRACKING) return null
+
+        val camPose = frame.camera.pose
+        val zAxis = camPose.zAxis
+        // Camera looks along -Z in OpenGL / ARCore camera space
+        val forwardX = -zAxis[0]
+        val forwardY = -zAxis[1]
+        val forwardZ = -zAxis[2]
+
+        var closePlaneHit: HitResult? = null
+        var ssHit: HitResult? = null
+        var ssIsBuilding = false
+
+        try {
+            val hitList = frame.hitTest(view.width / 2f, view.height / 2f)
+            for (hit in hitList) {
+                val trackable = hit.trackable
+                val d = hit.distance
+                if (trackable is Plane && trackable.trackingState == TrackingState.TRACKING &&
+                    trackable.isPoseInPolygon(hit.hitPose) && d in 0.35f..8.0f
+                ) {
+                    if (closePlaneHit == null || d < closePlaneHit.distance) {
+                        closePlaneHit = hit
+                    }
+                } else if (trackable is StreetscapeGeometry &&
+                    trackable.trackingState == TrackingState.TRACKING && d in 0.4f..55.0f
+                ) {
+                    if (ssHit == null || d < ssHit.distance) {
+                        ssHit = hit
+                        ssIsBuilding = (trackable.type == StreetscapeGeometry.Type.BUILDING)
+                    }
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        var chosenSurface = "none"
+        var targetPose: Pose
+        var hitDistance = 0f
+        var altAboveTerrain = 1.4
+
+        if (closePlaneHit != null && (ssHit == null || closePlaneHit.distance < ssHit.distance - 1.0f)) {
+            chosenSurface = "surface"
+            hitDistance = closePlaneHit.distance
+            val rawPose = closePlaneHit.hitPose
+            val pullback = Math.min(0.25f, hitDistance * 0.25f)
+            targetPose = Pose.makeTranslation(
+                rawPose.tx() - forwardX * pullback,
+                rawPose.ty() - forwardY * pullback,
+                rawPose.tz() - forwardZ * pullback
+            )
+            val rawDy = (rawPose.ty() - camPose.ty()).toDouble() + 1.45
+            altAboveTerrain = Math.min(Math.max(rawDy, 1.15), 4.5)
+        } else if (ssHit != null) {
+            chosenSurface = if (ssIsBuilding) "building" else "terrain"
+            hitDistance = ssHit.distance
+            val rawPose = ssHit.hitPose
+            if (ssIsBuilding) {
+                val pullback = Math.min(0.7f, hitDistance * 0.35f)
+                val adjX = rawPose.tx() - forwardX * pullback
+                val adjY = rawPose.ty() - forwardY * pullback
+                val adjZ = rawPose.tz() - forwardZ * pullback
+                targetPose = Pose.makeTranslation(adjX, adjY, adjZ)
+                val rawDy = (rawPose.ty() - camPose.ty()).toDouble() + 1.45
+                altAboveTerrain = Math.min(Math.max(rawDy, 1.35), 18.0)
+            } else {
+                targetPose = rawPose
+                altAboveTerrain = 1.35
+            }
+        } else {
+            val horizLen = Math.sqrt((forwardX * forwardX + forwardZ * forwardZ).toDouble()).toFloat()
+            val hx = if (horizLen > 0.01f) forwardX / horizLen else 0f
+            val hz = if (horizLen > 0.01f) forwardZ / horizLen else -1f
+            targetPose = Pose.makeTranslation(
+                camPose.tx() + hx * 3.0f,
+                camPose.ty(),
+                camPose.tz() + hz * 3.0f
+            )
+            hitDistance = 3.0f
+            altAboveTerrain = 1.35
+            chosenSurface = "none"
+        }
+
+        return try {
+            val geoPose = earth.getGeospatialPose(targetPose)
+            val out = HashMap<String, Any>()
+            out["isBuilding"] = (chosenSurface == "building")
+            out["hasTarget"] = (chosenSurface != "none")
+            out["surfaceType"] = chosenSurface
+            out["distance"] = hitDistance.toDouble()
+            out["latitude"] = geoPose.latitude
+            out["longitude"] = geoPose.longitude
+            out["altitudeAboveTerrain"] = altAboveTerrain
+            out
+        } catch (_: Exception) {
+            val camGeo = earth.cameraGeospatialPose
+            val out = HashMap<String, Any>()
+            out["isBuilding"] = false
+            out["hasTarget"] = false
+            out["surfaceType"] = "camera"
+            out["distance"] = 0.0
+            out["latitude"] = camGeo.latitude
+            out["longitude"] = camGeo.longitude
+            out["altitudeAboveTerrain"] = 1.35
+            out
+        }
+    }
+
+    private fun attachLabelIfNeeded(parentNode: Node, postName: String, map: HashMap<String, Any>) {
+        val isLive24h = (map["isLive24h"] as? Boolean) ?: false
+        val shapeMap = map["shape"] as? HashMap<*, *>
+        val sphereRadius = ((shapeMap?.get("radius") as? Number)?.toFloat()) ?: 0.6f
+        val altAboveGround = ((map["altitude"] as? Number)?.toFloat()) ?: 0f
+        val isBalloon = sphereRadius > 1.2f
+
+        if (isBalloon && altAboveGround >= 5.0f) {
+            val tetherHeight = Math.max(2.0f, altAboveGround - sphereRadius - 0.15f)
+            val sfColor = if (isLive24h) {
+                com.google.ar.sceneform.rendering.Color(1.0f, 0.72f, 0.18f, 0.55f)
+            } else {
+                com.google.ar.sceneform.rendering.Color(0.0f, 0.90f, 1.0f, 0.55f)
+            }
+            MaterialFactory.makeTransparentWithColor(activity.applicationContext, sfColor)
+                .thenAccept { mat ->
+                    val cyl = ShapeFactory.makeCylinder(
+                        0.032f,
+                        tetherHeight,
+                        Vector3(0f, -sphereRadius - tetherHeight / 2.0f, 0f),
+                        mat
+                    )
+                    cyl.isShadowCaster = false
+                    cyl.isShadowReceiver = false
+                    val tetherNode = Node()
+                    tetherNode.name = postName
+                    tetherNode.renderable = cyl
+                    parentNode.addChild(tetherNode)
+                }
+                .exceptionally { null }
+        }
+
+        val rawLabel = (map["label"] as? String)?.trim() ?: return
+        if (rawLabel.isEmpty()) return
+
+        val cleanText = if (rawLabel.length > 34) rawLabel.substring(0, 33) + "…" else rawLabel
+        val displayText = if (isLive24h) "⚡ $cleanText" else cleanText
+
+        val density = activity.resources.displayMetrics.density
+        val textView = TextView(activity).apply {
+            text = displayText
+            setTextColor(Color.parseColor("#F0F4FF"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isBalloon) 18f else 13f)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            val hPad = (14 * density).toInt()
+            val vPad = (7 * density).toInt()
+            setPadding(hPad, vPad, hPad, vPad)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 999f
+                setColor(Color.parseColor("#E00D1220"))
+                val strokeColor = if (isLive24h) Color.parseColor("#FFB82E") else Color.parseColor("#00E5FF")
+                setStroke((2 * density).toInt(), strokeColor)
+            }
+        }
+
+        ViewRenderable.builder()
+            .setView(activity, textView)
+            .build()
+            .thenAccept { viewRenderable ->
+                viewRenderable.isShadowCaster = false
+                viewRenderable.isShadowReceiver = false
+                val labelNode = Node()
+                labelNode.name = postName
+                labelNode.renderable = viewRenderable
+                labelNode.localPosition = Vector3(0f, sphereRadius + (if (isBalloon) 1.35f else 0.45f), 0f)
+                val scaleFactor = if (isBalloon) 2.4f else 1.0f
+                labelNode.localScale = Vector3(scaleFactor, scaleFactor, scaleFactor)
+                parentNode.addChild(labelNode)
+                val maxVisibleDist = if (isBalloon) 140.0f else 28.0f
+                labelNodeMeta[postName] = Pair(labelNode, maxVisibleDist)
+            }
+            .exceptionally { null }
+    }
+
     private fun getGeospatialPose(call: MethodCall, result: MethodChannel.Result) {
         val earth = arSceneView?.session?.earth
-        if (earth != null) {
-            debugLog("AUDIT: EarthState=" + earth.earthState + " | TrackingState=" + earth.trackingState)
-        } else {
-            debugLog("AUDIT: Earth object is NULL")
-        }
-        
         if (earth?.trackingState == TrackingState.TRACKING) {
             val pose = earth.cameraGeospatialPose
             val map = HashMap<String, Any>()
@@ -567,7 +807,15 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
             map["accuracy"] = pose.horizontalAccuracy
             result.success(map)
         } else {
-            result.error("UNAVAILABLE", "Earth tracking state is not TRACKING", null)
+            val failureReason = arSceneView?.arFrame?.camera?.trackingFailureReason?.name ?: "LOCALIZING"
+            val sentinel = HashMap<String, Any>()
+            sentinel["latitude"] = 0.0
+            sentinel["longitude"] = 0.0
+            sentinel["altitude"] = 0.0
+            sentinel["heading"] = 0.0
+            sentinel["accuracy"] = 999.0
+            sentinel["trackingFailureReason"] = failureReason
+            result.success(sentinel)
         }
     }
 
@@ -631,6 +879,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                             anchorNode.setParent(arSceneView?.scene)
                             anchorNode.name = flutterArCoreNode.name
                             anchorNode.renderable = renderable
+                            attachLabelIfNeeded(anchorNode, flutterArCoreNode.name, map)
                             attachNodeToParent(anchorNode, flutterArCoreNode.parentNodeName)
                             methodChannel.invokeMethod("onRooftopAnchorResolved", mapOf("name" to flutterArCoreNode.name, "success" to true))
                         }
@@ -676,6 +925,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                             anchorNode.setParent(arSceneView?.scene)
                             anchorNode.name = flutterArCoreNode.name
                             anchorNode.renderable = renderable
+                            attachLabelIfNeeded(anchorNode, flutterArCoreNode.name, map)
                             attachNodeToParent(anchorNode, flutterArCoreNode.parentNodeName)
                             methodChannel.invokeMethod("onTerrainAnchorResolved", mapOf("name" to flutterArCoreNode.name, "success" to true, "state" to state.name))
                         }
@@ -782,6 +1032,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
 
         try {
             arSceneView?.resume()
+            arSceneView?.scene?.camera?.farClipPlane = 500.0f
         } catch (ex: CameraNotAvailableException) {
             ArCoreUtils.displayError(activity, "Unable to get camera", ex)
             activity.finish()
@@ -805,6 +1056,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
             debugLog("Goodbye ARCore! Destroying the Activity now 7.")
 
             try {
+                labelNodeMeta.clear()
                 arSceneView?.scene?.removeOnUpdateListener(sceneUpdateListener)
                 arSceneView?.scene?.removeOnUpdateListener(faceSceneUpdateListener)
                 debugLog("Goodbye arSceneView.")

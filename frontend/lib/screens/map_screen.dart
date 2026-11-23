@@ -15,8 +15,8 @@ import '../ui/ar_view.dart';
 import 'admin_dashboard.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/moderation_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import '../widgets/auth_collision_sheet.dart';
+import '../theme/app_theme.dart';
+import '../widgets/login_bottom_sheet.dart';
 
 // ─── Brand Design Tokens ────────────────────────────────────────────────────
 class _PostColors {
@@ -97,6 +97,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   final LatLng _initialPosition = const LatLng(40.7251, -73.7055);
   Set<Marker> _markers = {};
   bool _locationGranted = false;
+  BitmapDescriptor? _cachedSingleMarker;
+  final Map<int, BitmapDescriptor> _cachedClusterMarkers = {};
 
   StreamSubscription<QuerySnapshot>? _postsSubscription;
 
@@ -266,56 +268,65 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         .snapshots()
         .listen((snapshot) async {
       try {
-        final posts = snapshot.docs.map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return Post.fromJson(data);
-        }).toList();
-        
+        final hiddenIds = await ModerationService().getHiddenPostIds();
+        final posts = snapshot.docs
+            .map((doc) {
+              final data = doc.data();
+              data['id'] = doc.id;
+              return Post.fromJson(data);
+            })
+            .where((p) =>
+                !p.isFlagged &&
+                !p.isExpired &&
+                !hiddenIds.contains(p.id ?? ''))
+            .toList();
+
         Set<Marker> newMarkers = {};
-      
-      List<List<Post>> clusters = [];
-      for (var p in posts) {
-        if (p.isFlagged) continue;
-        
-        bool clustered = false;
-        for (var cluster in clusters) {
-          final center = cluster.first;
-          double distance = Geolocator.distanceBetween(
-              center.latitude, center.longitude, p.latitude, p.longitude);
-          if (distance <= 8.0) {
-            cluster.add(p);
-            clustered = true;
-            break;
+
+        List<List<Post>> clusters = [];
+        for (var p in posts) {
+          bool clustered = false;
+          for (var cluster in clusters) {
+            final center = cluster.first;
+            double distance = Geolocator.distanceBetween(
+                center.latitude, center.longitude, p.latitude, p.longitude);
+            if (distance <= 8.0) {
+              cluster.add(p);
+              clustered = true;
+              break;
+            }
+          }
+          if (!clustered) {
+            clusters.add([p]);
           }
         }
-        if (!clustered) {
-          clusters.add([p]);
-        }
-      }
 
-      for (var cluster in clusters) {
-        final centerPost = cluster.first;
-        final centerLatLng = LatLng(centerPost.latitude, centerPost.longitude);
+        _cachedSingleMarker ??= await _buildSocialMarker();
 
-        BitmapDescriptor markerIcon;
-        if (cluster.length > 1) {
-          markerIcon = await _buildClusterMarker(cluster.length);
-        } else {
-          markerIcon = await _buildSocialMarker();
+        for (var cluster in clusters) {
+          final centerPost = cluster.first;
+          final centerLatLng = LatLng(centerPost.latitude, centerPost.longitude);
+
+          BitmapDescriptor markerIcon;
+          if (cluster.length > 1) {
+            markerIcon = _cachedClusterMarkers[cluster.length] ??=
+                await _buildClusterMarker(cluster.length);
+          } else {
+            markerIcon = _cachedSingleMarker!;
+          }
+          newMarkers.add(
+            Marker(
+              markerId: MarkerId(
+                  centerPost.id ?? 'cluster_${centerPost.latitude}_${centerPost.longitude}'),
+              position: centerLatLng,
+              icon: markerIcon,
+              anchor: const Offset(0.5, 1.0),
+              onTap: () {
+                _showPropertyBottomSheet(cluster);
+              },
+            ),
+          );
         }
-        newMarkers.add(
-          Marker(
-            markerId: MarkerId(centerPost.id ?? "cluster_${centerPost.latitude}_${centerPost.longitude}"),
-            position: centerLatLng,
-            icon: markerIcon,
-            anchor: const Offset(0.5, 1.0),
-            onTap: () {
-              _showPropertyBottomSheet(cluster);
-            },
-          ),
-        );
-      }
 
         if (mounted) {
           setState(() {
@@ -392,23 +403,29 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
-        // ACTIVE badge
+        // Status badge (Permanent vs 24h Live)
         Positioned(
           top: 14, left: 16,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
             decoration: BoxDecoration(
-              color: const Color(0xFF27AE60),
+              color: post.isLive24h ? const Color(0xFFD97706) : const Color(0xFF27AE60),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.circle, color: Colors.white, size: 6),
-                SizedBox(width: 5),
-                Text('ACTIVE POST', style: TextStyle(
-                  color: Colors.white, fontSize: 10,
-                  fontWeight: FontWeight.w700, letterSpacing: 1.0)),
+                const Icon(Icons.circle, color: Colors.white, size: 6),
+                const SizedBox(width: 5),
+                Text(
+                  post.isLive24h ? 'TODAY' : 'FOREVER',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.0,
+                  ),
+                ),
               ],
             ),
           ),
@@ -548,9 +565,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               ),
                             ),
                             const SizedBox(height: 10),
-                            // Address
+                            // Place / Address subtitle
                             Text(
-                              p.messageContent.isNotEmpty ? p.messageContent
+                              (p.placeName != null &&
+                                      p.placeName!.isNotEmpty &&
+                                      p.placeName != 'Unknown Location')
+                                  ? p.placeName!
                                   : '${p.latitude.toStringAsFixed(5)}, ${p.longitude.toStringAsFixed(5)}',
                               style: const TextStyle(
                                 color: _PostColors.textSecondary,
@@ -595,10 +615,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                 onTap: () {
                                   HapticFeedback.heavyImpact();
                                   Navigator.pop(context);
-                                  Navigator.push(context, PageRouteBuilder(
-                                    opaque: false,
-                                    pageBuilder: (_, _, _) => const ArView(),
-                                  ));
+                                  Navigator.push(
+                                    context,
+                                    PageRouteBuilder(
+                                      opaque: false,
+                                      pageBuilder: (_, _, _) => ArView(
+                                        initialTargetLat: p.latitude,
+                                        initialTargetLng: p.longitude,
+                                        initialTargetName:
+                                            (p.placeName != null &&
+                                                    p.placeName!.isNotEmpty &&
+                                                    p.placeName != 'Unknown Location')
+                                                ? p.placeName!
+                                                : p.messageContent,
+                                      ),
+                                    ),
+                                  );
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(vertical: 18),
@@ -635,6 +667,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                        final postId = p.id ?? '';
                                        if (postId.isEmpty) return;
                                        await ModerationService().hidePost(postId);
+                                       _fetchProperties(_initialPosition.latitude, _initialPosition.longitude);
                                        if (context.mounted) {
                                          Navigator.pop(context);
                                          ScaffoldMessenger.of(context).showSnackBar(
@@ -650,13 +683,13 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                    // ── Share ──────────────────────────
                                    TextButton.icon(
                                      onPressed: () {
-                                       final caption = p.messageContent ?? '';
+                                       final caption = p.messageContent;
                                        final lat = p.latitude;
                                        final lng = p.longitude;
                                        final mapsUrl = 'https://maps.google.com/?q=$lat,$lng';
                                        SharePlus.instance.share(
                                          ShareParams(
-                                           text: '📍 Found on Post Spatial: "$caption"\n\n$mapsUrl\n\nGet the app: https://dbomar-post-mvp.web.app',
+                                           text: '📍 Found on Post Spatial: "$caption"\n\n$mapsUrl\n\nSee it in AR: https://get-post.co/scan',
                                          ),
                                        );
                                      },
@@ -694,9 +727,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                        if (confirmed == true && context.mounted) {
                                          await ModerationService().reportPost(postId);
                                          await ModerationService().hidePost(postId);
-                                         Navigator.pop(context);
-                                         ScaffoldMessenger.of(context).showSnackBar(
-                                           const SnackBar(content: Text('Post reported. Thank you.')));
+                                         _fetchProperties(_initialPosition.latitude, _initialPosition.longitude);
+                                         if (context.mounted) {
+                                           Navigator.pop(context);
+                                           ScaffoldMessenger.of(context).showSnackBar(
+                                             const SnackBar(content: Text('Post reported. Thank you.')));
+                                         }
                                        }
                                      },
                                      icon: const Icon(Icons.flag_outlined,
@@ -762,12 +798,14 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _showCreationBottomSheet(LatLng coord, String address) {
-
+    final currentUser = AuthService().currentUser;
+    final bool isSignedIn = currentUser != null && !currentUser.isAnonymous;
+    bool isPermanent = isSignedIn;
     bool isSaving = false;
     bool isSaved = false;
     Post? createdPost;
     final messageController = TextEditingController();
-    final List<String> ideas = ["Leave a note", "Hidden Gem", "Checkout this spot", "Meet me here", "Custom..."];
+    final List<String> ideas = ["Must-order dish:", "Ask for...", "Hidden Gem", "Insider tip:", "Custom..."];
     String? selectedIdea;
 
     HapticFeedback.selectionClick();
@@ -953,7 +991,48 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     },
                   ),
 
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
+                  if (isSignedIn)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('📌 Forever')),
+                            selected: isPermanent,
+                            onSelected: isSaved || isSaving
+                                ? null
+                                : (val) {
+                                    if (val) setModalState(() => isPermanent = true);
+                                  },
+                            selectedColor: const Color(0xFF4F8EF7),
+                            backgroundColor: const Color(0xFFF4F6FB),
+                            labelStyle: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: isPermanent ? Colors.white : const Color(0xFF4A5568),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('⚡ Today')),
+                            selected: !isPermanent,
+                            onSelected: isSaved || isSaving
+                                ? null
+                                : (val) {
+                                    if (val) setModalState(() => isPermanent = false);
+                                  },
+                            selectedColor: const Color(0xFFD97706),
+                            backgroundColor: const Color(0xFFF4F6FB),
+                            labelStyle: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: !isPermanent ? Colors.white : const Color(0xFF4A5568),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
                   // Message / Listing details field
                   TextField(
                     controller: messageController,
@@ -961,7 +1040,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                     maxLines: 3,
                     style: const TextStyle(color: Color(0xFF0D1220), fontSize: 16, fontWeight: FontWeight.w800),
                     decoration: InputDecoration(
-                      hintText: 'Caption your post...',
+                      hintText: 'What should people know here?',
                       hintStyle: const TextStyle(color: Color(0xFF9CA8C0), fontSize: 14, fontWeight: FontWeight.w700),
                       filled: true,
                       fillColor: const Color(0xFFF4F6FB),
@@ -984,34 +1063,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                   if (!isSaved)
                     GestureDetector(
                       onTap: isSaving ? null : () async {
-                        if (messageController.text.isEmpty) return;
+                        if (messageController.text.trim().isEmpty) return;
                         setModalState(() => isSaving = true);
                         try {
+                          final effectivePermanent = isSignedIn && isPermanent;
                           final newPost = Post(
                             latitude: coord.latitude,
                             longitude: coord.longitude,
-                            messageContent: messageController.text,
+                            messageContent: messageController.text.trim(),
                             creatorId: AuthService().currentUser?.uid ?? 'anonymous',
                             ownerId: AuthService().currentUser?.uid,
                             reach: 50,
                             visibilityType: '1-to-many',
                             isSafe: true,
-                            altitude: 0.0,
+                            altitude: AppSizes.eyeLevelPinAltitude,
                             placeName: address,
+                            isPermanent: effectivePermanent,
+                            anchorSurface: 'map',
+                            expiresAt: effectivePermanent
+                                ? Post.permanentSentinel
+                                : DateTime.now().add(const Duration(hours: 24)),
                           );
                           createdPost = await _apiService.createPost(newPost);
-                          AuthService().hasDroppedFreePost = true; // Mark free post dropped
+                          AuthService().hasDroppedFreePost = true;
                           setModalState(() { isSaved = true; isSaving = false; });
-                          // Stream dynamically updates, no manual fetch needed
-                          
-                          // Wait for sheet dismissal before showing the Toast
+
                           Future.delayed(const Duration(milliseconds: 1500), () {
                             if (mounted && Navigator.canPop(context)) {
                               Navigator.pop(context);
-                              
+
                               final user = AuthService().currentUser;
-                              if (user != null && user.isAnonymous) {
-                                _showSaveItToast();
+                              if (user != null && user.isAnonymous && createdPost?.id != null) {
+                                _showSaveItToast(createdPost!.id!);
                               }
                             }
                           });
@@ -1049,10 +1132,17 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                       onTap: () {
                         HapticFeedback.heavyImpact();
                         Navigator.pop(context);
-                        Navigator.push(context, PageRouteBuilder(
-                          opaque: false,
-                          pageBuilder: (_, _, _) => const ArView(),
-                        ));
+                        Navigator.push(
+                          context,
+                          PageRouteBuilder(
+                            opaque: false,
+                            pageBuilder: (_, _, _) => ArView(
+                              initialTargetLat: coord.latitude,
+                              initialTargetLng: coord.longitude,
+                              initialTargetName: address,
+                            ),
+                          ),
+                        );
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 17),
@@ -1093,12 +1183,15 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showSaveItToast() {
-    ScaffoldMessenger.of(context).showSnackBar(
+  void _showSaveItToast(String createdPostId) {
+    final messenger = ScaffoldMessenger.of(context);
+    final rootCtx = Navigator.of(context, rootNavigator: true).context;
+    messenger.showSnackBar(
       SnackBar(
+        duration: const Duration(seconds: 7),
         behavior: SnackBarBehavior.floating,
         margin: const EdgeInsets.only(
-          bottom: 120, // Float above bottom action buttons
+          bottom: 120,
           left: 20,
           right: 20,
         ),
@@ -1109,15 +1202,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           side: const BorderSide(color: Color(0xFF252D3F), width: 1),
         ),
         content: const Text(
-          'Your post is live! It expires in 24 hours.',
+          'Live for Today! Want this tip pinned Forever?',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
         action: SnackBarAction(
-          label: 'Save It',
-          textColor: const Color(0xFF4F8EF7),
+          label: 'Keep Forever',
+          textColor: const Color(0xFF00E5FF),
           onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            _showLoginBottomSheet(context);
+            messenger.hideCurrentSnackBar();
+            if (rootCtx.mounted) {
+              showPostLoginBottomSheet(
+                rootCtx,
+                pendingPostIdToClaim: createdPostId,
+              );
+            }
           },
         ),
       ),
@@ -1125,159 +1223,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _showLoginBottomSheet(BuildContext context, {bool isLimitReached = false}) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: _PostColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            left: 24,
-            right: 24,
-            top: 14,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: _PostColors.divider, borderRadius: BorderRadius.circular(2)),
-              ),
-              const SizedBox(height: 24),
-              const Icon(Icons.lock_person_rounded, color: _PostColors.brand, size: 48),
-              const SizedBox(height: 16),
-              Text(
-                isLimitReached ? "You've reached your free limit." : 'Claim Your Identity',
-                style: const TextStyle(color: _PostColors.textPrimary, fontSize: 24, fontWeight: FontWeight.w800),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isLimitReached ? 'Log in to drop multiple posts.' : 'Log in to manage your posts and keep them alive past 24 hours.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: _PostColors.textSecondary, fontSize: 14, height: 1.4),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      await AuthService().linkWithGoogle();
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Successfully linked with Google!')),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        if (e is FirebaseAuthException && 
-                            (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use')) {
-                          final email = AuthService().lastCollisionEmail ?? '';
-                          if (email.isNotEmpty) {
-                            final providers = await AuthService().getProvidersForEmail(email);
-                            if (context.mounted) {
-                              Navigator.pop(context); // Close the login sheet
-                              showModalBottomSheet(
-                                context: context,
-                                backgroundColor: Colors.transparent,
-                                isScrollControlled: true,
-                                builder: (_) => AuthCollisionBottomSheet(
-                                  email: email,
-                                  availableProviders: providers,
-                                ),
-                              );
-                              return;
-                            }
-                          }
-                        }
-                        
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to link account: ${e.toString()}')),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.g_mobiledata_rounded, color: _PostColors.surface, size: 32),
-                  label: const Text('Continue with Google', style: TextStyle(color: _PostColors.surface, fontSize: 16, fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _PostColors.textPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      await AuthService().signInWithApple();
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Successfully signed in with Apple!')),
-                        );
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        if (e is FirebaseAuthException && 
-                            (e.code == 'account-exists-with-different-credential' || e.code == 'email-already-in-use')) {
-                          final email = AuthService().lastCollisionEmail ?? '';
-                          if (email.isNotEmpty) {
-                            final providers = await AuthService().getProvidersForEmail(email);
-                            if (context.mounted) {
-                              Navigator.pop(context); // Close the login sheet
-                              showModalBottomSheet(
-                                context: context,
-                                backgroundColor: Colors.transparent,
-                                isScrollControlled: true,
-                                builder: (_) => AuthCollisionBottomSheet(
-                                  email: email,
-                                  availableProviders: providers,
-                                ),
-                              );
-                              return;
-                            }
-                          }
-                        }
-                        
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(e.toString()),
-                            duration: const Duration(seconds: 5),
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.apple_rounded, color: Colors.white, size: 28),
-                  label: const Text('Continue with Apple', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    side: const BorderSide(color: Colors.white24, width: 1),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('v1.0.0', style: TextStyle(color: _PostColors.divider, fontSize: 12)),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+    showPostLoginBottomSheet(context, isLimitReached: isLimitReached);
   }
 
   void _showAuthenticatedProfileSheet(BuildContext context) {
@@ -1380,14 +1326,22 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                           expiresAt = DateTime.tryParse(data['expires_at']);
                         }
                         
+                        final bool isPerm = data['is_permanent'] == true ||
+                            (expiresAt != null && expiresAt.year >= 2090);
                         expiresAt ??= DateTime.now().add(const Duration(hours: 24));
-                        
-                        String countdown = 'Unknown';
-                        final diff = expiresAt.difference(DateTime.now());
-                        if (diff.isNegative) {
-                          countdown = 'Expired';
+
+                        String countdown;
+                        if (isPerm) {
+                          countdown = '📌 Forever';
                         } else {
-                          countdown = 'Expires in ${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
+                          final diff = expiresAt.difference(DateTime.now());
+                          if (diff.isNegative) {
+                            countdown = 'Expired';
+                          } else if (diff.inHours >= 48) {
+                            countdown = 'Active · ${diff.inDays}d left';
+                          } else {
+                            countdown = '⚡ Today · ${diff.inHours}h ${diff.inMinutes.remainder(60)}m left';
+                          }
                         }
 
                         return Card(
@@ -1411,11 +1365,12 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                               children: [
                                 IconButton(
                                   icon: const Icon(Icons.edit_rounded, color: _PostColors.textSecondary),
+                                  tooltip: 'Edit caption',
                                   onPressed: () {
                                     final TextEditingController controller = TextEditingController(text: caption);
                                     showDialog(
                                       context: context,
-                                      builder: (context) {
+                                      builder: (dialogCtx) {
                                         return AlertDialog(
                                           backgroundColor: _PostColors.surface,
                                           title: const Text('Edit Post', style: TextStyle(color: _PostColors.textPrimary)),
@@ -1429,19 +1384,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                           ),
                                           actions: [
                                             TextButton(
-                                              onPressed: () => Navigator.pop(context),
+                                              onPressed: () => Navigator.pop(dialogCtx),
                                               child: const Text('Cancel', style: TextStyle(color: _PostColors.textSecondary)),
                                             ),
                                             TextButton(
                                               onPressed: () async {
-                                                if (controller.text.trim().isNotEmpty) {
-                                                  await doc.reference.update({'caption': controller.text.trim()});
-                                                  if (context.mounted) {
-                                                    Navigator.pop(context);
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Post updated')),
-                                                    );
-                                                  }
+                                                final newText = controller.text.trim();
+                                                if (newText.isEmpty) return;
+                                                final updated = await ApiService().updatePost(
+                                                  doc.id,
+                                                  caption: newText,
+                                                );
+                                                if (dialogCtx.mounted) Navigator.pop(dialogCtx);
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text(
+                                                        updated != null
+                                                            ? 'Post updated'
+                                                            : 'Could not update post. Try again.',
+                                                      ),
+                                                    ),
+                                                  );
                                                 }
                                               },
                                               child: const Text('Save', style: TextStyle(color: _PostColors.brand)),
@@ -1452,20 +1416,28 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                                     );
                                   },
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.timer, color: _PostColors.brand),
-                                  onPressed: () async {
-                                    final newExpiry = DateTime.now().add(const Duration(hours: 24));
-                                    await doc.reference.update({
-                                      'expires_at': Timestamp.fromDate(newExpiry)
-                                    });
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('TTL Extended by 24h')),
+                                if (!isPerm)
+                                  IconButton(
+                                    icon: const Icon(Icons.push_pin_outlined, color: _PostColors.brand),
+                                    tooltip: 'Pin permanently',
+                                    onPressed: () async {
+                                      final updated = await ApiService().updatePost(
+                                        doc.id,
+                                        isPermanent: true,
                                       );
-                                    }
-                                  },
-                                ),
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              updated != null
+                                                  ? 'Post is now pinned permanently!'
+                                                  : 'Could not update post.',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
                                 IconButton(
                                   icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
                                   onPressed: () async {
@@ -1656,8 +1628,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             zoomControlsEnabled: false,
             buildingsEnabled: true,
             mapType: MapType.normal,
-            cloudMapId: Platform.isIOS
-                ? const String.fromEnvironment('IOS_MAP_ID', defaultValue: '')
+            mapId: Platform.isIOS
+                ? null
                 : const String.fromEnvironment('MAP_ID', defaultValue: ''),
             onMapCreated: (controller) {
               _mapController = controller;

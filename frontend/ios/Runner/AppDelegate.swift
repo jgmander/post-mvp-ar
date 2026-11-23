@@ -7,8 +7,21 @@ import CoreLocation
 @main
 @objc class AppDelegate: FlutterAppDelegate, CLLocationManagerDelegate {
   private var methodChannel: FlutterMethodChannel?
+  private var httpChannel: FlutterMethodChannel?
   // Strong instance property — prevents deallocation before user responds to permission prompt.
   private let locationManager = CLLocationManager()
+  // Native URLSession with iOS Wi-Fi Assist / cellular failover (avoids dart:io dead-Wi-Fi socket drops)
+  private lazy var nativeUrlSession: URLSession = {
+    let config = URLSessionConfiguration.ephemeral
+    config.allowsCellularAccess = true
+    config.allowsExpensiveNetworkAccess = true
+    config.allowsConstrainedNetworkAccess = true
+    config.waitsForConnectivity = false
+    config.requestCachePolicy = .reloadIgnoringLocalCacheData
+    config.timeoutIntervalForRequest = 8.5
+    config.timeoutIntervalForResource = 12.0
+    return URLSession(configuration: config)
+  }()
 
   override func application(
     _ application: UIApplication,
@@ -16,6 +29,7 @@ import CoreLocation
   ) -> Bool {
     let apiKey = Bundle.main.object(forInfoDictionaryKey: "MAPS_API_KEY") as? String ?? ""
     GMSServices.provideAPIKey(apiKey)
+    GMSServices.addInternalUsageAttributionID("gmp_git_agentskills_v1")
     print("DEBUG: [Post] AppDelegate GMSServices.provideAPIKey initialized for iOS with dynamic key")
     
     // Must call super first — this initializes the Flutter engine and sets window.rootViewController
@@ -32,6 +46,7 @@ import CoreLocation
     // rootViewController is now safely set after super.application returns
     if let controller = window?.rootViewController as? FlutterViewController {
         setupARKitChannel(controller: controller)
+        setupNativeHttpChannel(controller: controller)
     }
     
     return result
@@ -66,6 +81,66 @@ import CoreLocation
       } else {
         result(FlutterMethodNotImplemented)
       }
+    })
+  }
+
+  // MARK: - Native URLSession Bridge (Wi-Fi Assist & Seamless Cellular Failover)
+  func setupNativeHttpChannel(controller: FlutterViewController) {
+    self.httpChannel = FlutterMethodChannel(
+      name: "com.postspatial.net/http",
+      binaryMessenger: controller.binaryMessenger
+    )
+    self.httpChannel?.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) in
+      guard call.method == "request",
+            let args = call.arguments as? [String: Any],
+            let method = args["method"] as? String,
+            let urlString = args["url"] as? String,
+            let url = URL(string: urlString) else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Invalid HTTP arguments", details: nil))
+        return
+      }
+      guard let session = self?.nativeUrlSession else {
+        result(FlutterError(code: "NO_SESSION", message: "URLSession unavailable", details: nil))
+        return
+      }
+
+      var req = URLRequest(url: url)
+      req.httpMethod = method
+      req.cachePolicy = .reloadIgnoringLocalCacheData
+      req.allowsCellularAccess = true
+      if #available(iOS 13.0, *) {
+        req.allowsExpensiveNetworkAccess = true
+        req.allowsConstrainedNetworkAccess = true
+      }
+      if let timeoutMs = args["timeoutMs"] as? Int, timeoutMs > 0 {
+        req.timeoutInterval = Double(timeoutMs) / 1000.0
+      } else {
+        req.timeoutInterval = 8.5
+      }
+      if let headers = args["headers"] as? [String: String] {
+        for (k, v) in headers {
+          req.setValue(v, forHTTPHeaderField: k)
+        }
+      }
+      if let body = args["body"] as? String {
+        req.httpBody = body.data(using: .utf8)
+      }
+
+      let task = session.dataTask(with: req) { data, response, error in
+        DispatchQueue.main.async {
+          if let error = error {
+            result(FlutterError(code: "NETWORK_ERROR", message: error.localizedDescription, details: nil))
+            return
+          }
+          let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+          let bodyStr = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+          result([
+            "statusCode": statusCode,
+            "body": bodyStr
+          ])
+        }
+      }
+      task.resume()
     })
   }
 

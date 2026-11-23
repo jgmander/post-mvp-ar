@@ -1,9 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 /// Handles user-facing content moderation: reporting and hiding posts.
-/// - Reports are written to Firestore `reports/` (admin-only read).
+/// - Reports route through Cloud Run (`POST /posts/{id}/report`) so Gemini 2.5 Flash
+///   auto-removes confirmed unsafe content, falling back to Firestore `reports/` if offline.
 /// - Hidden posts are stored locally in SharedPreferences.
 class ModerationService {
   static final ModerationService _instance = ModerationService._internal();
@@ -14,11 +16,14 @@ class ModerationService {
 
   // ── Report ─────────────────────────────────────────────────────
 
-  /// Writes a report document to Firestore.
-  /// Firestore rules enforce: auth required, reporterId == uid, status == pending.
   Future<void> reportPost(String postId, {String reason = 'inappropriate'}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    final handledByBackend = await ApiService().reportPost(postId);
+    if (handledByBackend) return;
+
+    // Fallback if backend is unreachable
     await FirebaseFirestore.instance.collection('reports').add({
       'postId': postId,
       'reporterId': user.uid,
@@ -30,7 +35,6 @@ class ModerationService {
 
   // ── Hide (local) ───────────────────────────────────────────────
 
-  /// Persists a hidden post ID to SharedPreferences.
   Future<void> hidePost(String postId) async {
     final prefs = await SharedPreferences.getInstance();
     final hidden = prefs.getStringList(_hiddenKey) ?? [];
@@ -40,7 +44,6 @@ class ModerationService {
     }
   }
 
-  /// Returns all hidden post IDs as a Set for O(1) lookup.
   Future<Set<String>> getHiddenPostIds() async {
     final prefs = await SharedPreferences.getInstance();
     return (prefs.getStringList(_hiddenKey) ?? []).toSet();
