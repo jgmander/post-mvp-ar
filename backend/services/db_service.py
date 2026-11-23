@@ -1,10 +1,14 @@
 import os
+import re
 import geohash
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 from models.post import PERMANENT_EXPIRES_AT
 from datetime import datetime, timedelta, timezone
+
+_SAFE_DOC_ID_RE = re.compile(r"^[A-Za-z0-9_-]{6,48}$")
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "dbomar-post-mvp")
 
@@ -48,9 +52,34 @@ def _is_post_active(post: dict, now_utc: datetime) -> bool:
     return True
 
 
+def get_existing_post_if_owned(client_post_id: Optional[str], caller_uid: str) -> Optional[dict]:
+    """Returns an already-created post if client_post_id exists and belongs to caller_uid."""
+    if not db or not client_post_id or not _SAFE_DOC_ID_RE.match(client_post_id):
+        return None
+    doc_ref = db.collection(COLLECTION_NAME).document(client_post_id)
+    snap = doc_ref.get()
+    if not snap.exists:
+        return None
+    data = snap.to_dict()
+    if data.get("creator_id") == caller_uid or data.get("owner_id") == caller_uid:
+        data["id"] = snap.id
+        return data
+    return None
+
+
 def create_post(post_data: dict) -> dict:
     if not db:
         raise Exception("Firestore client not initialized")
+
+    requested_id = post_data.pop("client_post_id", None)
+    caller_uid = post_data.get("creator_id")
+    if requested_id and _SAFE_DOC_ID_RE.match(requested_id):
+        existing = get_existing_post_if_owned(requested_id, caller_uid)
+        if existing is not None:
+            return existing
+        doc_ref = db.collection(COLLECTION_NAME).document(requested_id)
+    else:
+        doc_ref = db.collection(COLLECTION_NAME).document()
 
     lat = post_data.get("latitude", 0.0)
     lng = post_data.get("longitude", 0.0)
@@ -63,8 +92,6 @@ def create_post(post_data: dict) -> dict:
     else:
         exp = _ensure_utc(post_data.get("expires_at"))
         post_data["expires_at"] = exp or (datetime.now(timezone.utc) + timedelta(hours=24))
-
-    doc_ref = db.collection(COLLECTION_NAME).document()
 
     full_data = {
         **post_data,
@@ -99,9 +126,9 @@ def get_nearby_posts(
         try:
             docs = (
                 db.collection(COLLECTION_NAME)
-                .where("is_flagged", "==", False)
-                .where("geohash", ">=", tile_hash)
-                .where("geohash", "<=", hash_end)
+                .where(filter=FieldFilter("is_flagged", "==", False))
+                .where(filter=FieldFilter("geohash", ">=", tile_hash))
+                .where(filter=FieldFilter("geohash", "<=", hash_end))
                 .limit(50)
                 .stream()
             )

@@ -14,6 +14,13 @@ sys.modules.setdefault("firebase_admin", mock_fb_admin)
 sys.modules.setdefault("firebase_admin.auth", MagicMock())
 sys.modules.setdefault("firebase_admin.credentials", MagicMock())
 sys.modules.setdefault("firebase_admin.firestore", MagicMock())
+try:
+    import geohash as _gh  # noqa: F401
+except ImportError:
+    _mock_gh = MagicMock()
+    _mock_gh.encode.side_effect = lambda lat, lng, precision=7: "9q5c1ab"[:precision]
+    _mock_gh.neighbors.return_value = ["9q5c0", "9q5c2"]
+    sys.modules["geohash"] = _mock_gh
 
 from models.post import PERMANENT_EXPIRES_AT, PostCreate, PostUpdate
 import services.db_service as db_service
@@ -211,6 +218,31 @@ class BackendUpgradeTests(unittest.TestCase):
             res = main.api_delete_my_posts(authorization="Bearer token")
         self.assertEqual(res["count"], 1)
         self.assertEqual(len(self.fake_db.store), 1)
+
+    def test_client_post_id_idempotent_retry(self):
+        """Retrying POST /posts with the same client_post_id returns the existing post without duplicating."""
+        payload = PostCreate(
+            client_post_id="post_1732380000_abcd1234",
+            latitude=40.7154,
+            longitude=-73.7033,
+            altitude=15.0,
+            post_type="balloon",
+            caption="balloon anchor spot test",
+            creator_id="jason_uid",
+            visibility_type="1-to-many",
+            is_permanent=True,
+        )
+        with patch("main._verify_token", return_value="jason_uid"), patch(
+            "main.analyze_post_content",
+            return_value={"is_safe": True, "cta_text": "Walk Here", "cta_action": "directions"},
+        ) as mock_ai:
+            first = main.api_create_post(payload, authorization="Bearer token")
+            second = main.api_create_post(payload, authorization="Bearer token")
+
+        self.assertEqual(first["id"], "post_1732380000_abcd1234")
+        self.assertEqual(second["id"], "post_1732380000_abcd1234")
+        self.assertEqual(len(self.fake_db.store), 1)
+        self.assertEqual(mock_ai.call_count, 1)
 
 
 if __name__ == "__main__":

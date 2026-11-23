@@ -30,7 +30,9 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 import com.google.ar.sceneform.*
 import com.google.ar.sceneform.math.Quaternion
 import com.google.ar.sceneform.math.Vector3
+import com.google.ar.sceneform.rendering.MaterialFactory
 import com.google.ar.sceneform.rendering.ModelRenderable
+import com.google.ar.sceneform.rendering.ShapeFactory
 import com.google.ar.sceneform.rendering.Texture
 import com.google.ar.sceneform.rendering.ViewRenderable
 import com.google.ar.sceneform.ux.AugmentedFaceNode
@@ -716,13 +718,39 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
     }
 
     private fun attachLabelIfNeeded(parentNode: Node, postName: String, map: HashMap<String, Any>) {
-        val rawLabel = (map["label"] as? String)?.trim() ?: return
-        if (rawLabel.isEmpty()) return
-
         val isLive24h = (map["isLive24h"] as? Boolean) ?: false
         val shapeMap = map["shape"] as? HashMap<*, *>
         val sphereRadius = ((shapeMap?.get("radius") as? Number)?.toFloat()) ?: 0.6f
+        val altAboveGround = ((map["altitude"] as? Number)?.toFloat()) ?: 0f
         val isBalloon = sphereRadius > 1.2f
+
+        if (isBalloon && altAboveGround >= 5.0f) {
+            val tetherHeight = Math.max(2.0f, altAboveGround - sphereRadius - 0.15f)
+            val sfColor = if (isLive24h) {
+                com.google.ar.sceneform.rendering.Color(1.0f, 0.72f, 0.18f, 0.55f)
+            } else {
+                com.google.ar.sceneform.rendering.Color(0.0f, 0.90f, 1.0f, 0.55f)
+            }
+            MaterialFactory.makeTransparentWithColor(activity.applicationContext, sfColor)
+                .thenAccept { mat ->
+                    val cyl = ShapeFactory.makeCylinder(
+                        0.032f,
+                        tetherHeight,
+                        Vector3(0f, -sphereRadius - tetherHeight / 2.0f, 0f),
+                        mat
+                    )
+                    cyl.isShadowCaster = false
+                    cyl.isShadowReceiver = false
+                    val tetherNode = Node()
+                    tetherNode.name = postName
+                    tetherNode.renderable = cyl
+                    parentNode.addChild(tetherNode)
+                }
+                .exceptionally { null }
+        }
+
+        val rawLabel = (map["label"] as? String)?.trim() ?: return
+        if (rawLabel.isEmpty()) return
 
         val cleanText = if (rawLabel.length > 34) rawLabel.substring(0, 33) + "…" else rawLabel
         val displayText = if (isLive24h) "⚡ $cleanText" else cleanText
@@ -761,7 +789,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                 val scaleFactor = if (isBalloon) 2.4f else 1.0f
                 labelNode.localScale = Vector3(scaleFactor, scaleFactor, scaleFactor)
                 parentNode.addChild(labelNode)
-                val maxVisibleDist = if (isBalloon) 65.0f else 28.0f
+                val maxVisibleDist = if (isBalloon) 140.0f else 28.0f
                 labelNodeMeta[postName] = Pair(labelNode, maxVisibleDist)
             }
             .exceptionally { null }
@@ -1004,6 +1032,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
 
         try {
             arSceneView?.resume()
+            arSceneView?.scene?.camera?.farClipPlane = 500.0f
         } catch (ex: CameraNotAvailableException) {
             ArCoreUtils.displayError(activity, "Unable to get camera", ex)
             activity.finish()

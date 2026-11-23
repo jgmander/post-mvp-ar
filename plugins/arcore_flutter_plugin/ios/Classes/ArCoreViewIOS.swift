@@ -29,7 +29,8 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     // Node tracking
     private var nodeMap: [String: SCNNode] = [:]
     private var garAnchorMap: [UUID: (node: SCNNode, anchor: GARAnchor)] = [:]
-    private var labelMetaMap: [String: (labelNode: SCNNode, maxDistance: Float)] = [:]
+    private var labelMetaMap: [String: [(labelNode: SCNNode, maxDistance: Float)]] = [:]
+    private var pendingFutures: [String: GARFuture] = [:]
 
     // Geospatial state
     private var latestGeospatialTransform: GARGeospatialTransform?
@@ -449,16 +450,18 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         let name = map["name"] as? String ?? "rooftop_\(Int.random(in: 1000...9999))"
 
         do {
-            let rooftopAnchor = try garSession.createAnchorOnRooftop(
+            let future = try garSession.createAnchorOnRooftop(
                 coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
                 altitudeAboveRooftop: alt,
                 eastUpSouthQAnchor: simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
             ) { [weak self] anchor, state in
                 guard let self = self else { return }
                 DispatchQueue.main.async {
-                    if let anchor = anchor {
+                    self.pendingFutures.removeValue(forKey: name)
+                    if let anchor = anchor, state == .success {
+                        self.removeExistingNodeIfPresent(name: name)
                         let sphere = self.createSphereNode(name: name, map: map)
-                        self.attachLabelIfNeeded(to: sphere, name: name, map: map)
+                        self.attachLabelIfNeeded(to: sphere, name: name, map: map, altitudeAboveGround: alt)
                         sphere.simdTransform = anchor.transform
                         self.arView?.scene.rootNode.addChildNode(sphere)
                         self.nodeMap[name] = sphere
@@ -472,11 +475,12 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                         self.methodChannel.invokeMethod("onRooftopAnchorResolved", arguments: [
                             "name": name,
                             "success": false,
-                            "state": "ERROR"
+                            "state": "ERROR_\(state.rawValue)"
                         ])
                     }
                 }
             }
+            pendingFutures[name] = future
             result(nil)
         } catch {
             result(FlutterError(code: "ROOFTOP_ERROR",
@@ -491,14 +495,16 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         guard let arView = arView else { return }
         let location = gesture.location(in: arView)
 
-        // First check for node hits
+        // First check for node hits (spheres, floating caption pills, or sky-balloon tethers)
         let hitResults = arView.hitTest(location, options: [
-            .searchMode: SCNHitTestSearchMode.closest.rawValue
+            .searchMode: SCNHitTestSearchMode.all.rawValue
         ])
-        if let hit = hitResults.first, let nodeName = hit.node.name, nodeMap[nodeName] != nil {
-            debugLog("onNodeTap: \(nodeName)")
-            methodChannel.invokeMethod("onNodeTap", arguments: nodeName)
-            return
+        for hit in hitResults {
+            if let nodeName = hit.node.name, nodeMap[nodeName] != nil {
+                debugLog("onNodeTap: \(nodeName)")
+                methodChannel.invokeMethod("onNodeTap", arguments: nodeName)
+                return
+            }
         }
 
         // Then check StreetscapeGeometry via GARSession raycast
@@ -642,21 +648,28 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             }
         }
 
+        // Ensure SceneKit camera far-clip supports block-scale Sky Balloons (500m vs default 100m)
+        if let cam = arView?.pointOfView?.camera, cam.zFar < 500.0 {
+            cam.zFar = 500.0
+        }
+
         // ~4Hz proximity LOD check for floating 3D caption pills (prevents clutter at distance)
         if earthFrameCounter % 15 == 0 {
             let camCol = frame.camera.transform.columns.3
             let camPos = simd_float3(camCol.x, camCol.y, camCol.z)
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                for (_, meta) in self.labelMetaMap {
-                    guard let parent = meta.labelNode.parent, !parent.isHidden else {
-                        meta.labelNode.isHidden = true
-                        continue
+                for (_, entries) in self.labelMetaMap {
+                    for meta in entries {
+                        guard let parent = meta.labelNode.parent, !parent.isHidden else {
+                            meta.labelNode.isHidden = true
+                            continue
+                        }
+                        let worldCol = meta.labelNode.simdWorldTransform.columns.3
+                        let labelPos = simd_float3(worldCol.x, worldCol.y, worldCol.z)
+                        let dist = simd_distance(camPos, labelPos)
+                        meta.labelNode.isHidden = dist > meta.maxDistance
                     }
-                    let nodeCol = parent.simdTransform.columns.3
-                    let nodePos = simd_float3(nodeCol.x, nodeCol.y, nodeCol.z)
-                    let dist = simd_distance(camPos, nodePos)
-                    meta.labelNode.isHidden = dist > meta.maxDistance
                 }
             }
         }
@@ -835,21 +848,26 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         result(nil)
     }
 
-    private func removeNode(name: String, result: FlutterResult) {
+    private func removeExistingNodeIfPresent(name: String) {
         if let node = nodeMap[name] {
             node.removeFromParentNode()
             nodeMap.removeValue(forKey: name)
             labelMetaMap.removeValue(forKey: name)
-            
-            // Remove from garAnchorMap and GARSession
+
             if let anchorId = garAnchorMap.first(where: { $0.value.node == node })?.key,
                let mapping = garAnchorMap[anchorId] {
                 garAnchorMap.removeValue(forKey: anchorId)
                 garSession?.remove(mapping.anchor)
             }
-            
             debugLog("Removed node: \(name)")
         }
+    }
+
+    private func removeNode(name: String, result: FlutterResult) {
+        if let pending = pendingFutures.removeValue(forKey: name) {
+            _ = pending.cancel()
+        }
+        removeExistingNodeIfPresent(name: name)
         result(nil)
     }
 
@@ -857,20 +875,25 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
 
     private func createSphereNode(name: String, map: [String: Any]) -> SCNNode {
         var radius: CGFloat = 0.3
-        var r: CGFloat = 0, g: CGFloat = 1, b: CGFloat = 1, a: CGFloat = 1
+        var r: CGFloat = 0, g: CGFloat = 0.90, b: CGFloat = 1.0, a: CGFloat = 0.88
 
-        // Parse shape from Flutter args (matching Android FlutterArCoreNode)
+        // Parse shape from Flutter args (ArCoreMaterial serializes color as [alpha, red, green, blue])
         if let shapeMap = map["shape"] as? [String: Any] {
             radius = CGFloat((shapeMap["radius"] as? NSNumber)?.doubleValue ?? 0.3)
-        }
-        if let materialsArr = map["shape"] as? [String: Any],
-           let matList = materialsArr["materials"] as? [[String: Any]],
-           let firstMat = matList.first,
-           let colorMap = firstMat["color"] as? [String: Any] {
-            r = CGFloat((colorMap["r"] as? NSNumber)?.doubleValue ?? 0) / 255.0
-            g = CGFloat((colorMap["g"] as? NSNumber)?.doubleValue ?? 255) / 255.0
-            b = CGFloat((colorMap["b"] as? NSNumber)?.doubleValue ?? 255) / 255.0
-            a = CGFloat((colorMap["a"] as? NSNumber)?.doubleValue ?? 255) / 255.0
+            if let matList = shapeMap["materials"] as? [[String: Any]],
+               let firstMat = matList.first {
+                if let colorArr = firstMat["color"] as? [NSNumber], colorArr.count >= 4 {
+                    a = CGFloat(colorArr[0].doubleValue) / 255.0
+                    r = CGFloat(colorArr[1].doubleValue) / 255.0
+                    g = CGFloat(colorArr[2].doubleValue) / 255.0
+                    b = CGFloat(colorArr[3].doubleValue) / 255.0
+                } else if let colorMap = firstMat["color"] as? [String: Any] {
+                    r = CGFloat((colorMap["r"] as? NSNumber)?.doubleValue ?? 0) / 255.0
+                    g = CGFloat((colorMap["g"] as? NSNumber)?.doubleValue ?? 230) / 255.0
+                    b = CGFloat((colorMap["b"] as? NSNumber)?.doubleValue ?? 255) / 255.0
+                    a = CGFloat((colorMap["a"] as? NSNumber)?.doubleValue ?? 230) / 255.0
+                }
+            }
         }
 
         let sphere = SCNSphere(radius: radius)
@@ -884,31 +907,18 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         return node
     }
 
-    private func attachLabelIfNeeded(to parentNode: SCNNode, name: String, map: [String: Any]) {
-        guard let rawLabel = map["label"] as? String else { return }
-        let trimmed = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let isLive24h = (map["isLive24h"] as? Bool) ?? false
-        var sphereRadius: CGFloat = 0.6
-        if let shapeMap = map["shape"] as? [String: Any],
-           let rNum = shapeMap["radius"] as? NSNumber {
-            sphereRadius = CGFloat(rNum.doubleValue)
-        }
-        let isBalloon = sphereRadius > 1.2
-
-        let maxChars = 34
-        let cleanText = trimmed.count > maxChars
-            ? String(trimmed.prefix(maxChars - 1)) + "…"
-            : trimmed
-        let displayText = isLive24h ? "⚡ \(cleanText)" : cleanText
-
+    private func makePillPlaneNode(
+        text: String,
+        nodeName: String,
+        isLive24h: Bool,
+        planeHeight: CGFloat
+    ) -> SCNNode {
         let font = UIFont.systemFont(ofSize: 28, weight: .bold)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: UIColor(red: 0.94, green: 0.96, blue: 1.0, alpha: 1.0)
         ]
-        let textSize = (displayText as NSString).size(withAttributes: attributes)
+        let textSize = (text as NSString).size(withAttributes: attributes)
         let hPad: CGFloat = 28
         let vPad: CGFloat = 16
         let imgWidth = ceil(textSize.width + hPad * 2)
@@ -919,7 +929,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         format.scale = 2.0
         format.opaque = false
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
-        let pillImage = renderer.image { ctx in
+        let pillImage = renderer.image { _ in
             let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 3, dy: 3)
             let path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2)
 
@@ -937,13 +947,10 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                 x: (canvasSize.width - textSize.width) / 2,
                 y: (canvasSize.height - textSize.height) / 2
             )
-            (displayText as NSString).draw(at: textOrigin, withAttributes: attributes)
+            (text as NSString).draw(at: textOrigin, withAttributes: attributes)
         }
 
-        // Physical world height of the floating pill: ~0.26m for pins, ~0.85m for high balloons
-        let planeHeight: CGFloat = isBalloon ? 0.85 : 0.26
         let planeWidth: CGFloat = planeHeight * (imgWidth / max(imgHeight, 1))
-
         let plane = SCNPlane(width: planeWidth, height: planeHeight)
         plane.firstMaterial?.diffuse.contents = pillImage
         plane.firstMaterial?.lightingModel = .constant
@@ -951,17 +958,102 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         plane.firstMaterial?.writesToDepthBuffer = false
 
         let labelNode = SCNNode(geometry: plane)
-        // Share the parent post's node name so tapping the floating text pill opens the post!
-        labelNode.name = name
-        labelNode.position = SCNVector3(0, Float(sphereRadius) + Float(planeHeight * 0.65) + 0.15, 0)
-
+        labelNode.name = nodeName
         let billboard = SCNBillboardConstraint()
         billboard.freeAxes = .Y
         labelNode.constraints = [billboard]
+        return labelNode
+    }
 
-        parentNode.addChildNode(labelNode)
-        let maxVisibleDist: Float = isBalloon ? 65.0 : 28.0
-        labelMetaMap[name] = (labelNode: labelNode, maxDistance: maxVisibleDist)
+    private func attachLabelIfNeeded(
+        to parentNode: SCNNode,
+        name: String,
+        map: [String: Any],
+        altitudeAboveGround: Double
+    ) {
+        let isLive24h = (map["isLive24h"] as? Bool) ?? false
+        var sphereRadius: CGFloat = 0.6
+        if let shapeMap = map["shape"] as? [String: Any],
+           let rNum = shapeMap["radius"] as? NSNumber {
+            sphereRadius = CGFloat(rNum.doubleValue)
+        }
+        let isBalloon = sphereRadius > 1.2
+
+        var metaEntries: [(labelNode: SCNNode, maxDistance: Float)] = []
+
+        // Sky Balloon vertical glowing tether + ground ring so close-range users (2m-20m)
+        // immediately see the vertical sky string rising from eye level up to 15m!
+        if isBalloon && altitudeAboveGround >= 5.0 {
+            let accentColor = isLive24h
+                ? UIColor(red: 1.0, green: 0.72, blue: 0.18, alpha: 0.55)
+                : UIColor(red: 0.0, green: 0.90, blue: 1.0, alpha: 0.55)
+
+            let tetherHeight = max(2.0, altitudeAboveGround - Double(sphereRadius) - 0.15)
+            let cylinder = SCNCylinder(radius: 0.032, height: CGFloat(tetherHeight))
+            cylinder.firstMaterial?.diffuse.contents = accentColor
+            cylinder.firstMaterial?.lightingModel = .constant
+            cylinder.firstMaterial?.writesToDepthBuffer = false
+            let tetherNode = SCNNode(geometry: cylinder)
+            tetherNode.name = name
+            tetherNode.position = SCNVector3(0, -Float(sphereRadius) - Float(tetherHeight / 2.0), 0)
+            parentNode.addChildNode(tetherNode)
+
+            let ring = SCNTorus(ringRadius: 0.30, pipeRadius: 0.03)
+            ring.firstMaterial?.diffuse.contents = accentColor.withAlphaComponent(0.75)
+            ring.firstMaterial?.lightingModel = .constant
+            let ringNode = SCNNode(geometry: ring)
+            ringNode.name = name
+            ringNode.position = SCNVector3(0, -Float(altitudeAboveGround) + 0.12, 0)
+            parentNode.addChildNode(ringNode)
+        }
+
+        guard let rawLabel = map["label"] as? String else {
+            if !metaEntries.isEmpty { labelMetaMap[name] = metaEntries }
+            return
+        }
+        let trimmed = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            if !metaEntries.isEmpty { labelMetaMap[name] = metaEntries }
+            return
+        }
+
+        let maxChars = 34
+        let cleanText = trimmed.count > maxChars
+            ? String(trimmed.prefix(maxChars - 1)) + "…"
+            : trimmed
+        let displayText = isLive24h ? "⚡ \(cleanText)" : cleanText
+
+        // 1. Primary floating caption pill directly above the sphere / sky balloon
+        let planeHeight: CGFloat = isBalloon ? 0.85 : 0.26
+        let skyLabelNode = makePillPlaneNode(
+            text: displayText,
+            nodeName: name,
+            isLive24h: isLive24h,
+            planeHeight: planeHeight
+        )
+        skyLabelNode.position = SCNVector3(0, Float(sphereRadius) + Float(planeHeight * 0.65) + 0.15, 0)
+        parentNode.addChildNode(skyLabelNode)
+        let maxVisibleDist: Float = isBalloon ? 140.0 : 28.0
+        metaEntries.append((labelNode: skyLabelNode, maxDistance: maxVisibleDist))
+
+        // 2. Eye-level tether signpost (1.35m above ground) for Sky Balloons when standing <= 22m away
+        if isBalloon && altitudeAboveGround >= 5.0 {
+            let shortChars = 24
+            let shortClean = trimmed.count > shortChars
+                ? String(trimmed.prefix(shortChars - 1)) + "…"
+                : trimmed
+            let eyeLabelNode = makePillPlaneNode(
+                text: "🎈 ↑ \(shortClean)",
+                nodeName: name,
+                isLive24h: isLive24h,
+                planeHeight: 0.23
+            )
+            eyeLabelNode.position = SCNVector3(0, Float(1.35 - altitudeAboveGround), 0)
+            parentNode.addChildNode(eyeLabelNode)
+            metaEntries.append((labelNode: eyeLabelNode, maxDistance: 22.0))
+        }
+
+        labelMetaMap[name] = metaEntries
     }
 
     // MARK: - Session Control
@@ -983,6 +1075,10 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
 
     private func dispose() {
         arView?.session.pause()
+        for (_, future) in pendingFutures {
+            _ = future.cancel()
+        }
+        pendingFutures.removeAll()
         garSession = nil
         nodeMap.removeAll()
         garAnchorMap.removeAll()
@@ -1012,16 +1108,18 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         let name = map["name"] as? String ?? "terrain_\(Int.random(in: 1000...9999))"
 
         do {
-            let terrainAnchor = try garSession.createAnchorOnTerrain(
+            let future = try garSession.createAnchorOnTerrain(
                 coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng),
                 altitudeAboveTerrain: alt,
                 eastUpSouthQAnchor: simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
             ) { [weak self] anchor, state in
                 guard let self = self else { return }
                 DispatchQueue.main.async {
-                    if let anchor = anchor {
+                    self.pendingFutures.removeValue(forKey: name)
+                    if let anchor = anchor, state == .success {
+                        self.removeExistingNodeIfPresent(name: name)
                         let sphere = self.createSphereNode(name: name, map: map)
-                        self.attachLabelIfNeeded(to: sphere, name: name, map: map)
+                        self.attachLabelIfNeeded(to: sphere, name: name, map: map, altitudeAboveGround: alt)
                         sphere.simdTransform = anchor.transform
                         self.arView?.scene.rootNode.addChildNode(sphere)
                         self.nodeMap[name] = sphere
@@ -1035,11 +1133,12 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                         self.methodChannel.invokeMethod("onTerrainAnchorResolved", arguments: [
                             "name": name,
                             "success": false,
-                            "state": "ERROR"
+                            "state": "ERROR_\(state.rawValue)"
                         ])
                     }
                 }
             }
+            pendingFutures[name] = future
             result(nil)
         } catch {
             result(FlutterError(code: "ANCHOR_ERROR", message: error.localizedDescription, details: nil))

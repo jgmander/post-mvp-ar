@@ -3,6 +3,7 @@ from models.post import PostCreate, PostResponse, PostUpdate
 from services.ai_service import analyze_post_content
 from services.db_service import (
     create_post,
+    get_existing_post_if_owned,
     get_nearby_posts,
     increment_views,
     update_post,
@@ -64,10 +65,16 @@ def read_root():
 def api_create_post(post: PostCreate, authorization: str = Header(None)):
     """
     Create a post. Requires Firebase auth token.
-    Content is screened by Gemini 2.5 Flash before storage.
-    Unsafe content returns 422. Rate-limited to 20 posts/hr per UID.
+    Supports idempotent retries via client_post_id so flaky cellular handoffs
+    never duplicate posts or fail on retry.
+    Content is screened by Gemini 3 Flash (MINIMAL thinking) before storage.
     """
     uid = _verify_token(authorization)
+
+    if post.client_post_id:
+        existing = get_existing_post_if_owned(post.client_post_id, uid)
+        if existing is not None:
+            return existing
 
     if not _check_rate_limit(uid):
         raise HTTPException(

@@ -42,6 +42,7 @@ class _ArViewState extends State<ArView>
   bool _arCoreInitialized = false;
   bool _postsRendered = false;
   final Set<String> _renderedPostIds = {};
+  final Set<String> _resolvedPostIds = {};
   Timer? _vpsTimer;
   int _vpsScanSeconds = 0;
   Timer? _holdHapticTimer;
@@ -407,11 +408,11 @@ class _ArViewState extends State<ArView>
     }
   }
 
-  void _showDropSuccessBanner(String message) {
+  void _showDropSuccessBanner(String message, {Duration duration = const Duration(milliseconds: 3200)}) {
     _bannerTimer?.cancel();
     if (!mounted) return;
     setState(() => _dropSuccessBanner = message);
-    _bannerTimer = Timer(const Duration(milliseconds: 3000), () {
+    _bannerTimer = Timer(duration, () {
       if (mounted) {
         setState(() => _dropSuccessBanner = null);
       }
@@ -560,6 +561,7 @@ class _ArViewState extends State<ArView>
     final contentController = TextEditingController();
     final currentUser = AuthService().currentUser;
     final bool isSignedIn = currentUser != null && !currentUser.isAnonymous;
+    final String sheetClientPostId = ApiService.generateClientPostId();
 
     bool isSubmitting = false;
     bool placeResolutionStarted = false;
@@ -881,10 +883,14 @@ class _ArViewState extends State<ArView>
                                         : DateTime.now().add(const Duration(hours: 24)),
                                   );
 
-                                  final created = await _apiService.createPost(newPost);
+                                  final created = await _apiService.createPost(
+                                    newPost,
+                                    clientPostId: sheetClientPostId,
+                                  );
                                   AuthService().hasDroppedFreePost = true;
 
                                   if (created.isFlagged == false) {
+                                    final nodeName = created.id ?? sheetClientPostId;
                                     final material = ArCoreMaterial(
                                       color: AppColors.ownPost.withValues(alpha: 0.9),
                                     );
@@ -895,38 +901,53 @@ class _ArViewState extends State<ArView>
                                           : AppSizes.pinRadius,
                                     );
                                     final node = ArCoreNode(
-                                      name: created.id ??
-                                          'pin_${DateTime.now().millisecondsSinceEpoch}',
+                                      name: nodeName,
                                       shape: sphere,
                                     );
 
-                                    // RULE 2: Always use resolveAnchorOnTerrainAsync
-                                    await arCoreController.resolveAnchorOnTerrainAsync(
-                                      node,
-                                      lat,
-                                      lng,
-                                      postAlt,
-                                      label: created.messageContent,
-                                      isLive24h: created.isLive24h,
-                                    );
+                                    setState(() {
+                                      nearbyPosts.removeWhere((p) => p.id == created.id);
+                                      nearbyPosts.add(created);
+                                      _renderedPostIds.add(nodeName);
+                                    });
+
+                                    // RULE 2: Always use resolveAnchorOnTerrainAsync.
+                                    // Guard local AR placement separately so a transient Cloud ARCore
+                                    // blip never tells the user their saved post failed; _renderPosts()
+                                    // retries automatically on the next 1Hz VPS tick if needed.
+                                    try {
+                                      await arCoreController.resolveAnchorOnTerrainAsync(
+                                        node,
+                                        lat,
+                                        lng,
+                                        postAlt,
+                                        label: created.messageContent,
+                                        isLive24h: created.isLive24h,
+                                      );
+                                    } catch (_) {
+                                      _renderedPostIds.remove(nodeName);
+                                    }
 
                                     HapticFeedback.heavyImpact();
                                     await Future.delayed(const Duration(milliseconds: 100));
                                     HapticFeedback.heavyImpact();
-
-                                    setState(() {
-                                      nearbyPosts.add(created);
-                                      _renderedPostIds.add(node.name!);
-                                    });
 
                                     if (sheetContext.mounted) {
                                       Navigator.pop(sheetContext);
                                     }
 
                                     if (!mounted) return;
-                                    final bannerPrefix =
-                                        effectivePermanent ? '📌 Pinned Forever' : '⚡ Live for Today';
-                                    _showDropSuccessBanner('$bannerPrefix · $resolvedPlace');
+                                    if (selectedPostType == 'balloon') {
+                                      _showDropSuccessBanner(
+                                        '🎈 Sky Balloon Anchored · Tilt Up Along the Tether!',
+                                        duration: const Duration(milliseconds: 4300),
+                                      );
+                                    } else {
+                                      final bannerPrefix = effectivePermanent
+                                          ? '📌 Pinned Forever'
+                                          : '⚡ Live for Today';
+                                      _showDropSuccessBanner('$bannerPrefix · $resolvedPlace');
+                                    }
 
                                     final user = AuthService().currentUser;
                                     if (user != null && user.isAnonymous && created.id != null) {
@@ -951,9 +972,15 @@ class _ArViewState extends State<ArView>
                                     }
                                   }
                                 } catch (e) {
+                                  final friendlyMsg = e is PostApiException
+                                      ? e.message
+                                      : 'Could not drop post: $e';
                                   if (mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('Could not drop post: $e')),
+                                      SnackBar(
+                                        content: Text(friendlyMsg),
+                                        behavior: SnackBarBehavior.floating,
+                                      ),
                                     );
                                   }
                                   setModalState(() => isSubmitting = false);
@@ -1031,15 +1058,21 @@ class _ArViewState extends State<ArView>
   // ─── Anchor & Tap Handlers ──────────────────────────────────────
 
   void _handleTerrainAnchorResolved(String name, bool success, String? state) {
-    if (!success) {
+    if (success) {
+      _resolvedPostIds.add(name);
+    } else {
       // RULE 4: Remove from rendered set so _renderPosts() retries on next VPS tick.
       _renderedPostIds.remove(name);
+      _resolvedPostIds.remove(name);
     }
   }
 
   void _handleRooftopAnchorResolved(String name, bool success, String? state) {
-    if (!success) {
+    if (success) {
+      _resolvedPostIds.add(name);
+    } else {
       _renderedPostIds.remove(name);
+      _resolvedPostIds.remove(name);
     }
   }
 
@@ -1269,15 +1302,21 @@ class _ArViewState extends State<ArView>
             : AppSizes.pinAltitude;
       }
 
-      // RULE 2: Always render via resolveAnchorOnTerrainAsync (+ floating 3D label!)
-      arCoreController.resolveAnchorOnTerrainAsync(
-        node,
-        post.latitude,
-        post.longitude,
-        altOffset,
-        label: post.messageContent,
-        isLive24h: post.isLive24h,
-      );
+      // RULE 2: Always render via resolveAnchorOnTerrainAsync (+ floating 3D label!).
+      // Catch synchronous platform errors so _renderedPostIds never wedges a post.
+      arCoreController
+          .resolveAnchorOnTerrainAsync(
+            node,
+            post.latitude,
+            post.longitude,
+            altOffset,
+            label: post.messageContent,
+            isLive24h: post.isLive24h,
+          )
+          .catchError((_) {
+        _renderedPostIds.remove(postId);
+        _resolvedPostIds.remove(postId);
+      });
       index++;
     }
   }
@@ -1326,7 +1365,9 @@ class _ArViewState extends State<ArView>
     _recordingTimer?.cancel();
     _debugLog.writeln('');
     _debugLog.writeln('[END] 15 ticks captured. $_buildingHitCount/15 BUILDING hits.');
-    _debugLog.writeln('Posts loaded: ${nearbyPosts.length} | Rendered: ${_renderedPostIds.length}');
+    _debugLog.writeln(
+      'Posts loaded: ${nearbyPosts.length} | Dispatched: ${_renderedPostIds.length} | Resolved3D: ${_resolvedPostIds.length}',
+    );
     HapticFeedback.heavyImpact();
     setState(() => _isRecording = false);
     _showDebugReviewSheet();

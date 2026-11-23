@@ -10,6 +10,7 @@ def _default_expires_at() -> datetime:
 
 
 class PostCreate(BaseModel):
+    client_post_id: Optional[str] = Field(default=None, max_length=64)
     latitude: float
     longitude: float
     altitude: float
