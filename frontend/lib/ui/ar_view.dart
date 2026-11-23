@@ -74,13 +74,18 @@ class _ArViewState extends State<ArView>
     }
   }
 
-  // Ghost-Pin state
+  // Ghost-Pin & Single-Popup Mutex state
   bool _isAuraTargetingBuilding = false;
   bool _isHolding = false;
   bool _isDialogShowing = false;
+  bool _isDropSheetOpen = false;
   double _holdProgress = 0.0;
-  static const Duration _holdDuration = Duration(milliseconds: 950);
+  static const Duration _holdDuration = Duration(milliseconds: 650);
   DateTime? _holdStartTime;
+
+  // Non-blocking post-drop confirmation banner
+  String? _dropSuccessBanner;
+  Timer? _bannerTimer;
 
   // Black Box Debug Recorder
   bool _isRecording = false;
@@ -373,9 +378,8 @@ class _ArViewState extends State<ArView>
   void _handleCenterHitBuilding(bool isBuilding) {
     if (_isAuraTargetingBuilding != isBuilding && mounted) {
       setState(() => _isAuraTargetingBuilding = isBuilding);
-      if (isBuilding) {
-        HapticFeedback.lightImpact();
-        if (_isRecording) _buildingHitCount++;
+      if (isBuilding && _isRecording) {
+        _buildingHitCount++;
       }
     }
   }
@@ -387,25 +391,37 @@ class _ArViewState extends State<ArView>
     });
   }
 
-  String _buildTargetLockLabel() {
+  String _buildShutterButtonLabel() {
     final surface = _centerTarget?['surfaceType'] as String? ?? 'none';
     final dist = (_centerTarget?['distance'] as num?)?.toDouble() ?? 0.0;
     final distText = dist >= 1.0 ? ' · ${dist.toStringAsFixed(0)}m' : '';
     switch (surface) {
       case 'building':
-        return 'Locked to Building$distText';
+        return 'Stick to Building$distText';
       case 'surface':
-        return 'Locked to Object$distText';
+        return 'Stick to Object$distText';
       case 'terrain':
-        return 'Locked to Ground$distText';
+        return 'Pin This Spot$distText';
       default:
-        return 'Anchoring Nearby';
+        return 'Drop Post Here';
     }
   }
 
-  // ─── Long-Press "Point, Hold, Release" ─────────────────────────
+  void _showDropSuccessBanner(String message) {
+    _bannerTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _dropSuccessBanner = message);
+    _bannerTimer = Timer(const Duration(milliseconds: 3000), () {
+      if (mounted) {
+        setState(() => _dropSuccessBanner = null);
+      }
+    });
+  }
+
+  // ─── Optional Hold-Anywhere Auto-Trigger (Fires at 100% Without Waiting for Lift) ──
 
   void _startHold() {
+    if (_isDropSheetOpen || _isDialogShowing) return;
     final hasVPS = _currentPose != null && ((_currentPose!['accuracy'] as num?) ?? 999.0) < 3.0;
     if (!hasVPS) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -423,48 +439,53 @@ class _ArViewState extends State<ArView>
       _holdStartTime = DateTime.now();
     });
 
-    _holdHapticTimer = Timer.periodic(const Duration(milliseconds: 140), (timer) {
+    _holdHapticTimer = Timer.periodic(const Duration(milliseconds: 110), (timer) {
       if (!_isHolding) {
         timer.cancel();
         return;
       }
-      HapticFeedback.selectionClick();
       _updateHoldProgress();
     });
   }
 
   void _updateHoldProgress() {
-    if (_holdStartTime == null || !mounted) return;
+    if (_holdStartTime == null || !mounted || !_isHolding) return;
     final elapsed = DateTime.now().difference(_holdStartTime!);
     final progress = (elapsed.inMilliseconds / _holdDuration.inMilliseconds).clamp(0.0, 1.0);
+    if (progress >= 1.0) {
+      // Auto-trigger immediately at 100% so user never waits wondering when to lift!
+      _holdHapticTimer?.cancel();
+      setState(() {
+        _isHolding = false;
+        _holdProgress = 0.0;
+      });
+      _dropGhostPin();
+      return;
+    }
+    HapticFeedback.selectionClick();
     setState(() => _holdProgress = progress);
   }
 
   void _releaseHold() {
     _holdHapticTimer?.cancel();
-
-    if (!_isHolding || _holdProgress < 0.8) {
+    if (_isHolding) {
       setState(() {
         _isHolding = false;
         _holdProgress = 0.0;
       });
-      return;
     }
-
-    HapticFeedback.heavyImpact();
-    setState(() {
-      _isHolding = false;
-      _holdProgress = 0.0;
-    });
-
-    _dropGhostPin();
   }
 
   Future<void> _dropGhostPin() async {
+    // Hard single-popup mutex: prevents stacked sheets under any gesture or network timing
+    if (_isDropSheetOpen || _isDialogShowing) return;
+
     final user = AuthService().currentUser;
     if (user != null && user.isAnonymous && AuthService().hasDroppedFreePost) {
       HapticFeedback.heavyImpact();
-      showPostLoginBottomSheet(context, isLimitReached: true);
+      _isDropSheetOpen = true;
+      await showPostLoginBottomSheet(context, isLimitReached: true)
+          .whenComplete(() => _isDropSheetOpen = false);
       return;
     }
 
@@ -483,9 +504,20 @@ class _ArViewState extends State<ArView>
       return;
     }
 
-    // Perform an immediate fresh raycast from the center crosshair so pointing
-    // across the street snaps directly onto the targeted building/surface!
-    final freshTarget = await arCoreController.raycastCenter() ?? _centerTarget;
+    _isDropSheetOpen = true;
+    HapticFeedback.mediumImpact();
+
+    // Freeze target snapshot immediately (120ms max raycast check, fallback to live 6Hz target)
+    // so the sheet opens with ZERO perceptible network delay!
+    Map<String, dynamic>? freshTarget;
+    try {
+      freshTarget = await arCoreController
+          .raycastCenter()
+          .timeout(const Duration(milliseconds: 120), onTimeout: () => _centerTarget);
+    } catch (_) {
+      freshTarget = _centerTarget;
+    }
+    freshTarget ??= _centerTarget;
 
     final double lat = (freshTarget?['latitude'] as num?)?.toDouble() ??
         (_currentPose!['latitude'] as num).toDouble();
@@ -500,62 +532,51 @@ class _ArViewState extends State<ArView>
     final double hitDistance =
         (freshTarget?['distance'] as num?)?.toDouble() ?? 0.0;
 
-    String placeName = 'Unknown Location';
-    String placeCategory = anchorSurface.toUpperCase();
+    if (!mounted) {
+      _isDropSheetOpen = false;
+      return;
+    }
 
-    try {
-      final placeData = await _apiService.getPlaceFromCoordinates(lat, lng);
-      if (placeData != null) {
-        placeName = placeData['name'] ?? placeName;
-        placeCategory = placeData['category'] ?? placeCategory;
-      }
-    } catch (_) {}
-
-    if (!mounted) return;
-    _showGhostPinSheet(
+    await _showGhostPinSheet(
       lat: lat,
       lng: lng,
       pinAltAboveTerrain: targetAltAboveTerrain,
       anchorSurface: anchorSurface,
       hitDistance: hitDistance,
-      placeName: placeName,
-      placeCategory: placeCategory,
-    );
+    ).whenComplete(() {
+      _isDropSheetOpen = false;
+    });
   }
 
   // ─── Post Creation Bottom Sheet ─────────────────────────────────
 
-  void _showGhostPinSheet({
+  Future<void> _showGhostPinSheet({
     required double lat,
     required double lng,
     required double pinAltAboveTerrain,
     required String anchorSurface,
     required double hitDistance,
-    required String placeName,
-    required String placeCategory,
   }) {
     final contentController = TextEditingController();
     final currentUser = AuthService().currentUser;
     final bool isSignedIn = currentUser != null && !currentUser.isAnonymous;
 
     bool isSubmitting = false;
+    bool placeResolutionStarted = false;
+    String placeName = 'Locating spot...';
+    String placeCategory = anchorSurface.toUpperCase();
     String selectedPostType = 'pin';
-    // Signed-in users default to Permanent neighborhood tips; guests drop a 24h live post
-    // and can upgrade it to Permanent with 1 tap right after dropping.
     bool isPermanent = isSignedIn;
-
-    final List<String> quickMessages = [
-      ..._getQuickMessages(placeCategory),
-      'Custom...',
-    ];
 
     final String lockSummary = anchorSurface == 'building'
         ? 'Anchored to Building${hitDistance >= 1 ? " · ${hitDistance.toStringAsFixed(0)}m away" : ""}'
-        : anchorSurface == 'surface' || anchorSurface == 'terrain'
-            ? 'Anchored to Surface${hitDistance >= 1 ? " · ${hitDistance.toStringAsFixed(0)}m away" : ""}'
-            : 'Anchored Nearby';
+        : anchorSurface == 'surface'
+            ? 'Anchored to Object${hitDistance >= 1 ? " · ${hitDistance.toStringAsFixed(0)}m away" : ""}'
+            : anchorSurface == 'terrain'
+                ? 'Anchored to Ground${hitDistance >= 1 ? " · ${hitDistance.toStringAsFixed(0)}m away" : ""}'
+                : 'Anchored Nearby';
 
-    showModalBottomSheet(
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF1A1A2E),
@@ -565,6 +586,25 @@ class _ArViewState extends State<ArView>
       builder: (BuildContext sheetContext) {
         return StatefulBuilder(
           builder: (BuildContext sheetContext, StateSetter setModalState) {
+            if (!placeResolutionStarted) {
+              placeResolutionStarted = true;
+              _apiService.getPlaceFromCoordinates(lat, lng).then((placeData) {
+                if (!sheetContext.mounted) return;
+                setModalState(() {
+                  placeName = placeData?['name'] ?? 'Anchored Location';
+                  placeCategory = placeData?['category'] ?? placeCategory;
+                });
+              }).catchError((_) {
+                if (!sheetContext.mounted) return;
+                setModalState(() => placeName = 'Anchored Location');
+              });
+            }
+
+            final List<String> quickMessages = [
+              ..._getQuickMessages(placeCategory),
+              'Custom...',
+            ];
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
@@ -818,6 +858,9 @@ class _ArViewState extends State<ArView>
                                       ? AppSizes.balloonAltitude
                                       : pinAltAboveTerrain;
 
+                                  final resolvedPlace = (placeName == 'Locating spot...')
+                                      ? 'Anchored Location'
+                                      : placeName;
                                   final effectivePermanent = isSignedIn && isPermanent;
                                   final newPost = Post(
                                     latitude: lat,
@@ -828,7 +871,7 @@ class _ArViewState extends State<ArView>
                                     ownerId: AuthService().currentUser?.uid,
                                     visibilityType: '1-to-many',
                                     reach: 50,
-                                    placeName: placeName,
+                                    placeName: resolvedPlace,
                                     placeCategory: placeCategory,
                                     postType: selectedPostType,
                                     isPermanent: effectivePermanent,
@@ -881,81 +924,14 @@ class _ArViewState extends State<ArView>
                                     }
 
                                     if (!mounted) return;
-                                    showDialog(
-                                      context: context,
-                                      barrierDismissible: false,
-                                      builder: (BuildContext context) {
-                                        return Center(
-                                          child: TweenAnimationBuilder<double>(
-                                            tween: Tween<double>(begin: 0.0, end: 1.0),
-                                            duration: const Duration(milliseconds: 550),
-                                            curve: Curves.elasticOut,
-                                            builder: (context, value, child) {
-                                              return Transform.scale(
-                                                scale: value,
-                                                child: Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                    horizontal: 32,
-                                                    vertical: 24,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black.withValues(alpha: 0.88),
-                                                    borderRadius: BorderRadius.circular(24),
-                                                    border: Border.all(
-                                                      color: Colors.cyanAccent.withValues(alpha: 0.6),
-                                                      width: 2,
-                                                    ),
-                                                  ),
-                                                  child: Column(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      const Icon(
-                                                        Icons.check_circle_outline,
-                                                        color: Colors.cyanAccent,
-                                                        size: 60,
-                                                      ),
-                                                      const SizedBox(height: 14),
-                                                      Text(
-                                                        effectivePermanent
-                                                            ? 'PINNED FOREVER'
-                                                            : 'LIVE FOR TODAY',
-                                                        style: const TextStyle(
-                                                          color: Colors.white,
-                                                          fontSize: 20,
-                                                          fontWeight: FontWeight.w800,
-                                                          letterSpacing: 1.8,
-                                                          decoration: TextDecoration.none,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 6),
-                                                      Text(
-                                                        lockSummary,
-                                                        style: TextStyle(
-                                                          color: Colors.white.withValues(alpha: 0.72),
-                                                          fontSize: 13,
-                                                          fontWeight: FontWeight.w500,
-                                                          decoration: TextDecoration.none,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        );
-                                      },
-                                    );
+                                    final bannerPrefix =
+                                        effectivePermanent ? '📌 Pinned Forever' : '⚡ Live for Today';
+                                    _showDropSuccessBanner('$bannerPrefix · $resolvedPlace');
 
-                                    Future.delayed(const Duration(milliseconds: 1600), () {
-                                      if (mounted && Navigator.canPop(context)) {
-                                        Navigator.pop(context);
-                                        final user = AuthService().currentUser;
-                                        if (user != null && user.isAnonymous && created.id != null) {
-                                          _showSaveItToast(created.id!);
-                                        }
-                                      }
-                                    });
+                                    final user = AuthService().currentUser;
+                                    if (user != null && user.isAnonymous && created.id != null) {
+                                      _showSaveItToast(created.id!);
+                                    }
                                   } else {
                                     if (sheetContext.mounted) Navigator.pop(sheetContext);
                                     if (mounted) {
@@ -1087,7 +1063,7 @@ class _ArViewState extends State<ArView>
   }
 
   void _handleOnNodeTap(String name) {
-    if (_isDialogShowing) return;
+    if (_isDialogShowing || _isDropSheetOpen) return;
     try {
       final post = nearbyPosts.firstWhere((p) {
         final index = nearbyPosts.indexOf(p);
@@ -1451,6 +1427,7 @@ class _ArViewState extends State<ArView>
     _vpsTimer?.cancel();
     _holdHapticTimer?.cancel();
     _recordingTimer?.cancel();
+    _bannerTimer?.cancel();
     _postsSubscription?.cancel();
     _pulseController.dispose();
     _reticleGlowController.dispose();
@@ -1543,7 +1520,6 @@ class _ArViewState extends State<ArView>
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
-                            HapticFeedback.mediumImpact();
                             if (hasVPS) {
                               _dropGhostPin();
                             }
@@ -1738,65 +1714,143 @@ class _ArViewState extends State<ArView>
                         ),
                       ),
 
-                      // ── Bottom Live Target Lock Pill + Instruction Hint ──
-                      Positioned(
-                        bottom: 30,
-                        left: 0,
-                        right: 0,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (hasVPS && !_isHolding)
-                              Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0D1220).withValues(alpha: 0.85),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(
-                                    color: _isAuraTargetingBuilding
-                                        ? Colors.cyanAccent.withValues(alpha: 0.7)
-                                        : Colors.white24,
-                                  ),
+                      // ── Non-blocking Post-Drop Success Banner ──
+                      if (_dropSuccessBanner != null)
+                        Positioned(
+                          top: MediaQuery.of(context).padding.top + 68,
+                          left: 24,
+                          right: 24,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0D1220).withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                  color: Colors.cyanAccent.withValues(alpha: 0.75),
+                                  width: 1.5,
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _isAuraTargetingBuilding
-                                          ? Icons.apartment_rounded
-                                          : Icons.adjust_rounded,
-                                      size: 14,
-                                      color: Colors.cyanAccent,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _buildTargetLockLabel(),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.cyanAccent.withValues(alpha: 0.25),
+                                    blurRadius: 16,
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle_rounded,
+                                    color: Colors.cyanAccent,
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      _dropSuccessBanner!,
                                       style: const TextStyle(
-                                        color: Colors.cyanAccent,
-                                        fontSize: 12,
+                                        color: Colors.white,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w700,
                                       ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                  ],
-                                ),
-                              ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                _isHolding
-                                    ? 'Hold to lock pin... ${(_holdProgress * 100).toInt()}%'
-                                    : hasVPS
-                                        ? 'Aim at any building or spot & hold (or tap pin)'
-                                        : 'Scanning for VPS lock...',
-                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
+                        ),
+
+                      // ── Thumb-Height Spatial Shutter Button ──
+                      Positioned(
+                        bottom: 32,
+                        left: 28,
+                        right: 28,
+                        child: Center(
+                          child: _isHolding
+                              ? Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0D1220).withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(28),
+                                    border: Border.all(color: Colors.cyanAccent),
+                                  ),
+                                  child: Text(
+                                    'Locking target... ${(_holdProgress * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      color: Colors.cyanAccent,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                )
+                              : hasVPS
+                                  ? ElevatedButton.icon(
+                                      onPressed: _isDropSheetOpen ? null : _dropGhostPin,
+                                      icon: Icon(
+                                        _isAuraTargetingBuilding
+                                            ? Icons.apartment_rounded
+                                            : Icons.add_location_alt_rounded,
+                                        size: 20,
+                                      ),
+                                      label: Text(
+                                        _buildShutterButtonLabel(),
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.cyanAccent,
+                                        foregroundColor: const Color(0xFF0A0E1A),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 14,
+                                        ),
+                                        elevation: 8,
+                                        shadowColor: Colors.cyanAccent.withValues(alpha: 0.45),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(28),
+                                        ),
+                                      ),
+                                    )
+                                  : Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 12,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0D1220).withValues(alpha: 0.82),
+                                        borderRadius: BorderRadius.circular(28),
+                                        border: Border.all(color: Colors.white24),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.cyanAccent,
+                                            ),
+                                          ),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            'Pan across buildings to lock...',
+                                            style: TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                         ),
                       ),
                     ],

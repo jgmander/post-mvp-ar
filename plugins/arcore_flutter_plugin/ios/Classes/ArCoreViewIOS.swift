@@ -36,6 +36,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     private var latestFrame: GARFrame?
     private var streetscapeGeometries: [GARStreetscapeGeometry] = []
     private var latestCenterTarget: [String: Any]?
+    private var hasLiDARMesh: Bool = false
 
     // Throttle: fire center target updates at ~6Hz on state/distance change
     private var lastCenterSummaryKey: String = ""
@@ -214,18 +215,8 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             ])
         }
 
-        // Start ARKit session with world tracking
-        let config = ARWorldTrackingConfiguration()
-        let authStatus = locationManager.authorizationStatus
-        if authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways {
-            config.worldAlignment = .gravityAndHeading
-        } else {
-            // SPRINT 6.3: Boot with .gravityAndHeading regardless.
-            // GARSession requires compass fusion from frame 0. The delegate callback
-            // locationManagerDidChangeAuthorization will restart the session once
-            // the user grants access, so there is no functional loss.
-            config.worldAlignment = .gravityAndHeading
-        }
+        // Start ARKit session with world tracking (+ LiDAR mesh on Pro iPhones)
+        let config = makeWorldTrackingConfig()
         
         let runException = ObjCExceptionCatcher.catchException {
             self.arView?.session.run(config, options: [.resetTracking, .removeExistingAnchors])
@@ -239,6 +230,20 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         }
         
         debugLog("ARKit session started (alignment: \(config.worldAlignment.rawValue))")
+    }
+
+    private func makeWorldTrackingConfig() -> ARWorldTrackingConfiguration {
+        let config = ARWorldTrackingConfiguration()
+        config.worldAlignment = .gravityAndHeading
+        config.planeDetection = [.horizontal, .vertical]
+        if #available(iOS 13.4, *),
+           ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
+            config.sceneReconstruction = .mesh
+            self.hasLiDARMesh = true
+        } else {
+            self.hasLiDARMesh = false
+        }
+        return config
     }
 
     private func getAPIKey() -> String {
@@ -540,8 +545,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         let status = manager.authorizationStatus
         guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
         guard isARSupported, let arView = arView else { return }
-        let config = ARWorldTrackingConfiguration()
-        config.worldAlignment = .gravityAndHeading
+        let config = makeWorldTrackingConfig()
         let exception = ObjCExceptionCatcher.catchException {
             arView.session.run(config, options: [.resetTracking])
         }
@@ -682,15 +686,20 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         let origin = simd_float3(camTransform.columns.3.x, camTransform.columns.3.y, camTransform.columns.3.z)
         let forward = -simd_normalize(simd_float3(camTransform.columns.2.x, camTransform.columns.2.y, camTransform.columns.2.z))
 
-        // 1. Close-range physical surface check (<= 8m: dog-waste stations, patio tables, signs)
+        // 1. Close-range physical object check (trees, dog-waste stations, patio tables, signs).
+        // On LiDAR Pro iPhones (`sceneReconstruction = .mesh`), `.estimatedPlane` intersects the
+        // true hardware LiDAR scene mesh within its 5.0m laser range. On non-LiDAR iPhones,
+        // require `.existingPlaneGeometry` so leaves/bark never trigger noisy depth guesses.
         var closeHitTransform: simd_float4x4?
         var closeHitDist: Float = Float.greatestFiniteMagnitude
-        let planeQuery = ARRaycastQuery(origin: origin, direction: forward, allowing: .estimatedPlane, alignment: .any)
+        let localTarget: ARRaycastQuery.Target = hasLiDARMesh ? .estimatedPlane : .existingPlaneGeometry
+        let maxLocalRange: Float = hasLiDARMesh ? 5.0 : 6.0
+        let planeQuery = ARRaycastQuery(origin: origin, direction: forward, allowing: localTarget, alignment: .any)
         if let firstPlane = session.raycast(planeQuery).first {
             let pCol = firstPlane.worldTransform.columns.3
             let pPos = simd_float3(pCol.x, pCol.y, pCol.z)
             let d = simd_distance(origin, pPos)
-            if d >= 0.35 && d <= 8.0 {
+            if d >= 0.35 && d <= maxLocalRange {
                 closeHitTransform = firstPlane.worldTransform
                 closeHitDist = d
             }
@@ -713,13 +722,17 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         var altAboveTerrain: Double = 1.4
 
         if let localTransform = closeHitTransform,
-           (ssHit == nil || closeHitDist < (ssHit!.distance - 1.2)) {
-            // Close-range object / patio table / sidewalk fixture wins
+           (ssHit == nil || closeHitDist < (ssHit!.distance - 1.0)) {
+            // Close-range LiDAR mesh / verified plane wins; step 0.25m back toward camera
+            // so the 0.6m sphere sits on the front face of a tree trunk or post.
             chosenSurface = "surface"
             hitDistance = closeHitDist
-            targetWorldMatrix = localTransform
-            let hitY = localTransform.columns.3.y
-            altAboveTerrain = Double(min(max((hitY - origin.y) + 1.45, 1.0), 4.0))
+            let rawCol = localTransform.columns.3
+            let rawPos = simd_float3(rawCol.x, rawCol.y, rawCol.z)
+            let pullback = min(Float(0.25), hitDistance * Float(0.25))
+            let adjPos = rawPos - forward * pullback
+            targetWorldMatrix.columns.3 = simd_float4(adjPos.x, adjPos.y, adjPos.z, 1.0)
+            altAboveTerrain = Double(min(max((rawPos.y - origin.y) + 1.45, 1.15), 4.5))
         } else if let validSS = ssHit {
             let isBuilding = (validSS.streetscapeGeometry.type == .building)
             chosenSurface = isBuilding ? "building" : "terrain"
@@ -955,8 +968,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
 
     private func resumeSession() {
         guard let arView = arView else { return }
-        let config = ARWorldTrackingConfiguration()
-        config.worldAlignment = .gravityAndHeading
+        let config = makeWorldTrackingConfig()
         
         let exception = ObjCExceptionCatcher.catchException {
             arView.session.run(config)

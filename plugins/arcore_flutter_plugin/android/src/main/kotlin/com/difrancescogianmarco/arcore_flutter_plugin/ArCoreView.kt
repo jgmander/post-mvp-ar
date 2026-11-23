@@ -648,12 +648,18 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
         var hitDistance = 0f
         var altAboveTerrain = 1.4
 
-        if (closePlaneHit != null && (ssHit == null || closePlaneHit.distance < ssHit.distance - 1.2f)) {
+        if (closePlaneHit != null && (ssHit == null || closePlaneHit.distance < ssHit.distance - 1.0f)) {
             chosenSurface = "surface"
             hitDistance = closePlaneHit.distance
-            targetPose = closePlaneHit.hitPose
-            val rawDy = (targetPose.ty() - camPose.ty()).toDouble() + 1.45
-            altAboveTerrain = Math.min(Math.max(rawDy, 1.0), 4.0)
+            val rawPose = closePlaneHit.hitPose
+            val pullback = Math.min(0.25f, hitDistance * 0.25f)
+            targetPose = Pose.makeTranslation(
+                rawPose.tx() - forwardX * pullback,
+                rawPose.ty() - forwardY * pullback,
+                rawPose.tz() - forwardZ * pullback
+            )
+            val rawDy = (rawPose.ty() - camPose.ty()).toDouble() + 1.45
+            altAboveTerrain = Math.min(Math.max(rawDy, 1.15), 4.5)
         } else if (ssHit != null) {
             chosenSurface = if (ssIsBuilding) "building" else "terrain"
             hitDistance = ssHit.distance
