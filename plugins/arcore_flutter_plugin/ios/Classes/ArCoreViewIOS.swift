@@ -29,14 +29,16 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
     // Node tracking
     private var nodeMap: [String: SCNNode] = [:]
     private var garAnchorMap: [UUID: (node: SCNNode, anchor: GARAnchor)] = [:]
+    private var labelMetaMap: [String: (labelNode: SCNNode, maxDistance: Float)] = [:]
 
     // Geospatial state
     private var latestGeospatialTransform: GARGeospatialTransform?
     private var latestFrame: GARFrame?
     private var streetscapeGeometries: [GARStreetscapeGeometry] = []
+    private var latestCenterTarget: [String: Any]?
 
-    // Throttle: only fire onCenterHitBuilding on value change
-    private var lastCenterHitState: Bool = false
+    // Throttle: fire center target updates at ~6Hz on state/distance change
+    private var lastCenterSummaryKey: String = ""
 
     // Diagnostic: throttle earth state logging to ~1/sec
     private var earthFrameCounter: Int = 0
@@ -293,6 +295,8 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             }
         case "getGeospatialPose":
             getGeospatialPose(result: result)
+        case "raycastCenter":
+            raycastCenter(result: result)
         case "addEarthAnchorNode":
             if let map = call.arguments as? [String: Any] {
                 addEarthAnchorNode(map: map, result: result)
@@ -449,6 +453,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                 DispatchQueue.main.async {
                     if let anchor = anchor {
                         let sphere = self.createSphereNode(name: name, map: map)
+                        self.attachLabelIfNeeded(to: sphere, name: name, map: map)
                         sphere.simdTransform = anchor.transform
                         self.arView?.scene.rootNode.addChildNode(sphere)
                         self.nodeMap[name] = sphere
@@ -612,14 +617,168 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         // Update streetscape geometries
         if let geometries = validGarFrame.streetscapeGeometries {
             streetscapeGeometries = geometries
+        }
 
-            // THROTTLE: Only fire onCenterHitBuilding on value CHANGE (not every frame)
-            let hasBuildingInCenter = geometries.contains { $0.type == .building }
-            if hasBuildingInCenter != lastCenterHitState {
-                lastCenterHitState = hasBuildingInCenter
-                methodChannel.invokeMethod("onCenterHitBuilding", arguments: hasBuildingInCenter)
+        // ~6Hz center-crosshair raycast against Streetscape Geometry + close-range surfaces
+        if earthFrameCounter % 10 == 0,
+           let earth = validGarFrame.earth,
+           earth.trackingState == .tracking {
+            if let target = performCenterRaycast(session: session, frame: frame) {
+                let surfaceType = target["surfaceType"] as? String ?? "none"
+                let distBucket = Int(((target["distance"] as? Double) ?? 0.0).rounded())
+                let summaryKey = "\(surfaceType)_\(distBucket)"
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    self.latestCenterTarget = target
+                    if summaryKey != self.lastCenterSummaryKey {
+                        self.lastCenterSummaryKey = summaryKey
+                        self.methodChannel.invokeMethod("onCenterHitBuilding", arguments: target)
+                    }
+                }
             }
         }
+
+        // ~4Hz proximity LOD check for floating 3D caption pills (prevents clutter at distance)
+        if earthFrameCounter % 15 == 0 {
+            let camCol = frame.camera.transform.columns.3
+            let camPos = simd_float3(camCol.x, camCol.y, camCol.z)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                for (_, meta) in self.labelMetaMap {
+                    guard let parent = meta.labelNode.parent, !parent.isHidden else {
+                        meta.labelNode.isHidden = true
+                        continue
+                    }
+                    let nodeCol = parent.simdTransform.columns.3
+                    let nodePos = simd_float3(nodeCol.x, nodeCol.y, nodeCol.z)
+                    let dist = simd_distance(camPos, nodePos)
+                    meta.labelNode.isHidden = dist > meta.maxDistance
+                }
+            }
+        }
+    }
+
+    // MARK: - Center Crosshair Laser-Raycast (Streetscape + Close-Range Surface)
+
+    private func raycastCenter(result: @escaping FlutterResult) {
+        if let arView = arView,
+           let currentFrame = arView.session.currentFrame,
+           let fresh = performCenterRaycast(session: arView.session, frame: currentFrame) {
+            self.latestCenterTarget = fresh
+            result(fresh)
+            return
+        }
+        result(self.latestCenterTarget)
+    }
+
+    private func performCenterRaycast(session: ARSession, frame: ARFrame) -> [String: Any]? {
+        guard let garSession = garSession,
+              let earth = latestFrame?.earth,
+              earth.trackingState == .tracking else {
+            return nil
+        }
+
+        let camTransform = frame.camera.transform
+        let origin = simd_float3(camTransform.columns.3.x, camTransform.columns.3.y, camTransform.columns.3.z)
+        let forward = -simd_normalize(simd_float3(camTransform.columns.2.x, camTransform.columns.2.y, camTransform.columns.2.z))
+
+        // 1. Close-range physical surface check (<= 8m: dog-waste stations, patio tables, signs)
+        var closeHitTransform: simd_float4x4?
+        var closeHitDist: Float = Float.greatestFiniteMagnitude
+        let planeQuery = ARRaycastQuery(origin: origin, direction: forward, allowing: .estimatedPlane, alignment: .any)
+        if let firstPlane = session.raycast(planeQuery).first {
+            let pCol = firstPlane.worldTransform.columns.3
+            let pPos = simd_float3(pCol.x, pCol.y, pCol.z)
+            let d = simd_distance(origin, pPos)
+            if d >= 0.35 && d <= 8.0 {
+                closeHitTransform = firstPlane.worldTransform
+                closeHitDist = d
+            }
+        }
+
+        // 2. Streetscape Geometry raycast (buildings + terrain up to 55m across the street)
+        var ssHit: GARStreetscapeGeometryRaycastResult?
+        let rayException = ObjCExceptionCatcher.catchException {
+            if let hits = try? garSession.raycastStreetscapeGeometry(origin: origin, direction: forward) {
+                ssHit = hits.first(where: { $0.distance >= 0.4 && $0.distance <= 55.0 })
+            }
+        }
+        if rayException != nil {
+            ssHit = nil
+        }
+
+        var chosenSurface = "none"
+        var targetWorldMatrix = matrix_identity_float4x4
+        var hitDistance: Float = 0.0
+        var altAboveTerrain: Double = 1.4
+
+        if let localTransform = closeHitTransform,
+           (ssHit == nil || closeHitDist < (ssHit!.distance - 1.2)) {
+            // Close-range object / patio table / sidewalk fixture wins
+            chosenSurface = "surface"
+            hitDistance = closeHitDist
+            targetWorldMatrix = localTransform
+            let hitY = localTransform.columns.3.y
+            altAboveTerrain = Double(min(max((hitY - origin.y) + 1.45, 1.0), 4.0))
+        } else if let validSS = ssHit {
+            let isBuilding = (validSS.streetscapeGeometry.type == .building)
+            chosenSurface = isBuilding ? "building" : "terrain"
+            hitDistance = validSS.distance
+            let rawCol = validSS.worldTransform.columns.3
+            let rawPos = simd_float3(rawCol.x, rawCol.y, rawCol.z)
+
+            if isBuilding {
+                // Pull 0.7m back toward camera so 0.6m sphere sits cleanly outside facade glass
+                let pullback = min(Float(0.7), hitDistance * Float(0.35))
+                let adjPos = rawPos - forward * pullback
+                targetWorldMatrix.columns.3 = simd_float4(adjPos.x, adjPos.y, adjPos.z, 1.0)
+                altAboveTerrain = Double(min(max((rawPos.y - origin.y) + 1.45, 1.35), 18.0))
+            } else {
+                targetWorldMatrix = validSS.worldTransform
+                altAboveTerrain = 1.35
+            }
+        } else {
+            // Open sky / far horizon fallback: project 3.0m horizontally in front of camera
+            var flatForward = simd_float3(forward.x, 0.0, forward.z)
+            if simd_length(flatForward) < 0.01 {
+                flatForward = simd_float3(0.0, 0.0, -1.0)
+            } else {
+                flatForward = simd_normalize(flatForward)
+            }
+            let projPos = origin + flatForward * Float(3.0)
+            targetWorldMatrix.columns.3 = simd_float4(projPos.x, origin.y, projPos.z, 1.0)
+            hitDistance = 3.0
+            altAboveTerrain = 1.35
+            chosenSurface = "none"
+        }
+
+        var resolvedGeo: GARGeospatialTransform?
+        let geoException = ObjCExceptionCatcher.catchException {
+            resolvedGeo = try? garSession.geospatialTransform(transform: targetWorldMatrix)
+        }
+        if geoException != nil || resolvedGeo == nil {
+            guard let camGeo = latestGeospatialTransform else { return nil }
+            return [
+                "isBuilding": false,
+                "hasTarget": false,
+                "surfaceType": "camera",
+                "distance": 0.0,
+                "latitude": camGeo.coordinate.latitude,
+                "longitude": camGeo.coordinate.longitude,
+                "altitudeAboveTerrain": 1.35
+            ]
+        }
+
+        let geo = resolvedGeo!
+        return [
+            "isBuilding": chosenSurface == "building",
+            "hasTarget": chosenSurface != "none",
+            "surfaceType": chosenSurface,
+            "distance": Double(hitDistance),
+            "latitude": geo.coordinate.latitude,
+            "longitude": geo.coordinate.longitude,
+            "altitudeAboveTerrain": altAboveTerrain
+        ]
     }
 
     // MARK: - Node Management
@@ -667,6 +826,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         if let node = nodeMap[name] {
             node.removeFromParentNode()
             nodeMap.removeValue(forKey: name)
+            labelMetaMap.removeValue(forKey: name)
             
             // Remove from garAnchorMap and GARSession
             if let anchorId = garAnchorMap.first(where: { $0.value.node == node })?.key,
@@ -711,6 +871,86 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         return node
     }
 
+    private func attachLabelIfNeeded(to parentNode: SCNNode, name: String, map: [String: Any]) {
+        guard let rawLabel = map["label"] as? String else { return }
+        let trimmed = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        let isLive24h = (map["isLive24h"] as? Bool) ?? false
+        var sphereRadius: CGFloat = 0.6
+        if let shapeMap = map["shape"] as? [String: Any],
+           let rNum = shapeMap["radius"] as? NSNumber {
+            sphereRadius = CGFloat(rNum.doubleValue)
+        }
+        let isBalloon = sphereRadius > 1.2
+
+        let maxChars = 34
+        let cleanText = trimmed.count > maxChars
+            ? String(trimmed.prefix(maxChars - 1)) + "…"
+            : trimmed
+        let displayText = isLive24h ? "⚡ \(cleanText)" : cleanText
+
+        let font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor(red: 0.94, green: 0.96, blue: 1.0, alpha: 1.0)
+        ]
+        let textSize = (displayText as NSString).size(withAttributes: attributes)
+        let hPad: CGFloat = 28
+        let vPad: CGFloat = 16
+        let imgWidth = ceil(textSize.width + hPad * 2)
+        let imgHeight = ceil(textSize.height + vPad * 2)
+        let canvasSize = CGSize(width: imgWidth, height: imgHeight)
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2.0
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
+        let pillImage = renderer.image { ctx in
+            let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 3, dy: 3)
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2)
+
+            UIColor(red: 0.05, green: 0.07, blue: 0.13, alpha: 0.88).setFill()
+            path.fill()
+
+            let borderColor = isLive24h
+                ? UIColor(red: 1.0, green: 0.72, blue: 0.18, alpha: 0.95)
+                : UIColor(red: 0.0, green: 0.90, blue: 1.0, alpha: 0.90)
+            borderColor.setStroke()
+            path.lineWidth = 3.5
+            path.stroke()
+
+            let textOrigin = CGPoint(
+                x: (canvasSize.width - textSize.width) / 2,
+                y: (canvasSize.height - textSize.height) / 2
+            )
+            (displayText as NSString).draw(at: textOrigin, withAttributes: attributes)
+        }
+
+        // Physical world height of the floating pill: ~0.26m for pins, ~0.85m for high balloons
+        let planeHeight: CGFloat = isBalloon ? 0.85 : 0.26
+        let planeWidth: CGFloat = planeHeight * (imgWidth / max(imgHeight, 1))
+
+        let plane = SCNPlane(width: planeWidth, height: planeHeight)
+        plane.firstMaterial?.diffuse.contents = pillImage
+        plane.firstMaterial?.lightingModel = .constant
+        plane.firstMaterial?.isDoubleSided = true
+        plane.firstMaterial?.writesToDepthBuffer = false
+
+        let labelNode = SCNNode(geometry: plane)
+        // Share the parent post's node name so tapping the floating text pill opens the post!
+        labelNode.name = name
+        labelNode.position = SCNVector3(0, Float(sphereRadius) + Float(planeHeight * 0.65) + 0.15, 0)
+
+        let billboard = SCNBillboardConstraint()
+        billboard.freeAxes = .Y
+        labelNode.constraints = [billboard]
+
+        parentNode.addChildNode(labelNode)
+        let maxVisibleDist: Float = isBalloon ? 65.0 : 28.0
+        labelMetaMap[name] = (labelNode: labelNode, maxDistance: maxVisibleDist)
+    }
+
     // MARK: - Session Control
 
     private func resumeSession() {
@@ -734,6 +974,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
         garSession = nil
         nodeMap.removeAll()
         garAnchorMap.removeAll()
+        labelMetaMap.removeAll()
         debugLog("ARCore iOS disposed")
     }
 
@@ -768,6 +1009,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                 DispatchQueue.main.async {
                     if let anchor = anchor {
                         let sphere = self.createSphereNode(name: name, map: map)
+                        self.attachLabelIfNeeded(to: sphere, name: name, map: map)
                         sphere.simdTransform = anchor.transform
                         self.arView?.scene.rootNode.addChildNode(sphere)
                         self.nodeMap[name] = sphere

@@ -1,12 +1,19 @@
 from fastapi import FastAPI, HTTPException, Header
-from models.post import PostCreate, PostResponse
+from models.post import PostCreate, PostResponse, PostUpdate
 from services.ai_service import analyze_post_content
-from services.db_service import create_post, get_nearby_posts, increment_views, delete_post
+from services.db_service import (
+    create_post,
+    get_nearby_posts,
+    increment_views,
+    update_post,
+    delete_post,
+    delete_user_posts,
+)
 import firebase_admin
-from firebase_admin import auth as firebase_auth, credentials, firestore as fb_firestore
+from firebase_admin import auth as firebase_auth, firestore as fb_firestore
 import uvicorn
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import threading
 
 # ── Firebase Admin ─────────────────────────────────────────────────────────────
@@ -16,18 +23,14 @@ if not firebase_admin._apps:
 app = FastAPI(title="Post AR MVP Backend")
 
 # ── Per-UID In-Memory Rate Limiter ─────────────────────────────────────────────
-# Caps post creation to MAX_POSTS_PER_HOUR per authenticated user.
-# Resets automatically as timestamps age out.
-# Note: across Cloud Run instances this is per-instance. With max=3 instances
-# the effective limit is 3× — acceptable for MVP. Use Firestore counters for
-# strict global limiting.
 MAX_POSTS_PER_HOUR = 20
 _rate_lock = threading.Lock()
 _post_timestamps: dict = defaultdict(list)
 
+
 def _check_rate_limit(uid: str) -> bool:
     """Returns True if UID is within the hourly post limit."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=1)
     with _rate_lock:
         _post_timestamps[uid] = [t for t in _post_timestamps[uid] if t > cutoff]
@@ -35,6 +38,7 @@ def _check_rate_limit(uid: str) -> bool:
             return False
         _post_timestamps[uid].append(now)
         return True
+
 
 # ── Auth helper ────────────────────────────────────────────────────────────────
 def _verify_token(authorization: str | None) -> str:
@@ -47,6 +51,7 @@ def _verify_token(authorization: str | None) -> str:
         return decoded["uid"]
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired Firebase ID token")
+
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
@@ -62,32 +67,28 @@ def api_create_post(post: PostCreate, authorization: str = Header(None)):
     Content is screened by Gemini 2.5 Flash before storage.
     Unsafe content returns 422. Rate-limited to 20 posts/hr per UID.
     """
-    # 1. Auth
     uid = _verify_token(authorization)
 
-    # 2. Rate limit
     if not _check_rate_limit(uid):
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded. Max {MAX_POSTS_PER_HOUR} posts per hour."
+            detail=f"Rate limit exceeded. Max {MAX_POSTS_PER_HOUR} posts per hour.",
         )
 
-    # 3. Content length cap (protects Gemini token costs)
     caption = post.caption[:500] if post.caption else ""
 
-    # 4. Gemini moderation — block unsafe content before storage
     analysis = analyze_post_content(caption, post.place_name, post.place_category)
     if not analysis.get("is_safe", True):
         raise HTTPException(
             status_code=422,
-            detail="Post content did not pass safety review."
+            detail="Post content did not pass safety review.",
         )
 
-    # 5. Build and save post
-    post_dict = post.dict()
-    post_dict["caption"] = caption          # use truncated version
+    post_dict = post.model_dump() if hasattr(post, "model_dump") else post.dict()
+    post_dict["caption"] = caption
     post_dict.update({
         "creator_id": uid,
+        "owner_id": uid,
         "cta_text": analysis.get("cta_text"),
         "cta_action": analysis.get("cta_action"),
         "is_safe": True,
@@ -102,12 +103,69 @@ def api_create_post(post: PostCreate, authorization: str = Header(None)):
 
 
 @app.get("/posts")
-def api_get_posts(lat: float = 0.0, lng: float = 0.0, radius_km: float = 1.0):
+def api_get_posts(
+    lat: float = 0.0,
+    lng: float = 0.0,
+    radius_km: float = 1.0,
+    include_expired: bool = False,
+):
     try:
-        posts = get_nearby_posts(lat=lat, lng=lng, radius_km=radius_km)
+        posts = get_nearby_posts(
+            lat=lat,
+            lng=lng,
+            radius_km=radius_km,
+            include_expired=include_expired,
+        )
         return posts
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/posts/{post_id}", response_model=PostResponse)
+def api_update_post(
+    post_id: str,
+    payload: PostUpdate,
+    authorization: str = Header(None),
+):
+    """
+    Authenticated update for post caption, TTL/permanence, or anonymous-to-signed-in claim.
+    Re-runs Gemini safety screening whenever caption text is modified.
+    """
+    caller_uid = _verify_token(authorization)
+
+    updates: dict = {}
+    if payload.caption is not None:
+        trimmed = payload.caption.strip()[:500]
+        if not trimmed:
+            raise HTTPException(status_code=400, detail="Caption cannot be empty")
+        analysis = analyze_post_content(trimmed)
+        if not analysis.get("is_safe", True):
+            raise HTTPException(
+                status_code=422,
+                detail="Updated post content did not pass safety review.",
+            )
+        updates["caption"] = trimmed
+        updates["cta_text"] = analysis.get("cta_text")
+        updates["cta_action"] = analysis.get("cta_action")
+
+    if payload.is_permanent is not None:
+        updates["is_permanent"] = payload.is_permanent
+    if payload.expires_at is not None:
+        updates["expires_at"] = payload.expires_at
+    if payload.action_url is not None:
+        updates["action_url"] = payload.action_url
+
+    updated = update_post(
+        post_id=post_id,
+        caller_uid=caller_uid,
+        updates=updates,
+        claim_from_uid=payload.claim_from_uid,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if updated is False:
+        raise HTTPException(status_code=403, detail="You do not own this post")
+    return updated
 
 
 @app.post("/posts/{post_id}/view")
@@ -130,7 +188,6 @@ def api_report_post(post_id: str, authorization: str = Header(None)):
 
     db = fb_firestore.client()
 
-    # 1. Fetch the post
     post_ref = db.collection("posts").document(post_id)
     post_snap = post_ref.get()
     if not post_snap.exists:
@@ -139,11 +196,9 @@ def api_report_post(post_id: str, authorization: str = Header(None)):
     post_data = post_snap.to_dict()
     caption = post_data.get("caption", post_data.get("message_content", ""))
 
-    # 2. Re-analyze with Gemini
     analysis = analyze_post_content(caption)
     confirmed_unsafe = not analysis.get("is_safe", True)
 
-    # 3. Write report document
     report_doc = {
         "postId": post_id,
         "reporterId": reporter_uid,
@@ -154,7 +209,6 @@ def api_report_post(post_id: str, authorization: str = Header(None)):
     }
     db.collection("reports").add(report_doc)
 
-    # 4. Auto-delete if Gemini confirms the violation
     if confirmed_unsafe:
         post_ref.delete()
         return {"status": "removed", "detail": "Post removed after safety review."}
@@ -173,6 +227,14 @@ def api_delete_post(post_id: str, authorization: str = Header(None)):
     if success is False:
         raise HTTPException(status_code=403, detail="You do not own this post")
     return {"status": "deleted"}
+
+
+@app.delete("/users/me/posts")
+def api_delete_my_posts(authorization: str = Header(None)):
+    """Deletes all posts owned by the caller prior to Account Deletion."""
+    caller_uid = _verify_token(authorization)
+    deleted_count = delete_user_posts(caller_uid=caller_uid)
+    return {"status": "deleted", "count": deleted_count}
 
 
 if __name__ == "__main__":

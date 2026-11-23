@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - 'plugins/**'
       - '.github/workflows/deploy-android.yml'
   workflow_dispatch:
 

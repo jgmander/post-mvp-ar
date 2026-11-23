@@ -17,6 +17,9 @@ class AppColors {
   /// Primary cyan accent — ghost pin, borders, badges
   static const Color accent = Color(0xFF00E5FF);
 
+  /// Warm amber accent for 24h Live ephemeral moments
+  static const Color liveAmber = Color(0xFFFFB82E);
+
   /// Success green
   static const Color success = Color(0xFF69F0AE);
 
@@ -38,7 +41,7 @@ class AppSizes {
   // ── AR Altitude Offsets (terrain-relative — DO NOT CHANGE) ──────
   // See .agent/agent_rules.md RULE 1 before touching these values.
   // These are meters ABOVE the terrain surface, NOT GPS/WGS-84 altitude.
-  // Changing these will cause posts to render underground or at wrong height.
   static const double balloonAltitude = 15.0;
-  static const double pinAltitude = 0.0;
+  static const double pinAltitude = 0.0;          // Legacy clamp baseline
+  static const double eyeLevelPinAltitude = 1.4;  // Eye/chest height for new pins
 }

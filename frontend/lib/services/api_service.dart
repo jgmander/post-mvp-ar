@@ -48,10 +48,77 @@ class ApiService {
     }
   }
 
+  /// Updates caption, permanence/TTL, or claims an anonymous post after sign-in.
+  Future<Post?> updatePost(
+    String postId, {
+    String? caption,
+    bool? isPermanent,
+    DateTime? expiresAt,
+    String? actionUrl,
+    String? claimFromUid,
+  }) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return null;
+      final idToken = await user.getIdToken();
+
+      final payload = <String, dynamic>{
+        if (caption != null) 'caption': caption,
+        if (isPermanent != null) 'is_permanent': isPermanent,
+        if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
+        if (actionUrl != null) 'action_url': actionUrl,
+        if (claimFromUid != null) 'claim_from_uid': claimFromUid,
+      };
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/posts/$postId'),
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(payload),
+      );
+      if (response.statusCode == 200) {
+        return Post.fromJson(jsonDecode(response.body));
+      }
+      print('Failed to update post $postId (${response.statusCode}): ${response.body}');
+      return null;
+    } catch (e) {
+      print('Error updating post $postId: $e');
+      return null;
+    }
+  }
+
+  /// Increments post view count on tap.
+  Future<void> viewPost(String postId) async {
+    if (postId.isEmpty) return;
+    try {
+      await http.post(Uri.parse('$baseUrl/posts/$postId/view'));
+    } catch (_) {}
+  }
+
+  /// Reports a post via the Cloud Run backend so Gemini 2.5 Flash can
+  /// re-screen and auto-remove confirmed policy violations immediately.
+  Future<bool> reportPost(String postId) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+      final idToken = await user.getIdToken();
+      final response = await http.post(
+        Uri.parse('$baseUrl/posts/$postId/report'),
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Backend reportPost fallback triggered: $e');
+      return false;
+    }
+  }
 
   /// Deletes a post via the authenticated backend endpoint.
-  /// The backend validates the Firebase ID token and confirms ownership
-  /// before deleting via the Admin SDK — bypassing the Firestore client-write block.
   Future<bool> deletePost(String postId) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -71,6 +138,26 @@ class ApiService {
     }
   }
 
+  /// Deletes all posts owned by the caller via the backend Admin SDK.
+  Future<bool> deleteMyPosts() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return false;
+      final idToken = await user.getIdToken();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/users/me/posts'),
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Failed to delete user posts: $e');
+      return false;
+    }
+  }
+
   Future<List<Post>> getNearbyPosts(double lat, double lng, {double radiusKm = 1.0}) async {
     final response = await http.get(
       Uri.parse('$baseUrl/posts?lat=$lat&lng=$lng&radius_km=$radiusKm'),
@@ -84,20 +171,16 @@ class ApiService {
     }
   }
 
-  // The Maps API key is injected at compile time via --dart-define=MAPS_API_KEY=...
-  // and bound to the native Info.plist / build.gradle. There is no runtime fetch needed.
-  // Use String.fromEnvironment('MAPS_API_KEY') if you need it in Dart directly.
   Future<Map<String, String>?> getPlaceFromCoordinates(double lat, double lng) async {
-    final mapsApiKey = const String.fromEnvironment('MAPS_API_KEY');
+    const mapsApiKey = String.fromEnvironment('MAPS_API_KEY');
 
     if (mapsApiKey.isEmpty) {
       print('WARNING: MAPS_API_KEY not found in dart-define environment.');
       return null;
     }
 
-    // First try Places API to get a specific business/poi name
     try {
-      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=50&key=$mapsApiKey';
+      final placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=$lat,$lng&radius=35&key=$mapsApiKey';
       final placesResponse = await http.get(Uri.parse(placesUrl));
       if (placesResponse.statusCode == 200) {
         final data = jsonDecode(placesResponse.body);
@@ -112,7 +195,6 @@ class ApiService {
         }
       }
 
-      // Fallback to Reverse Geocoding for physical addresses
       final geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$mapsApiKey';
       final geocodeResponse = await http.get(Uri.parse(geocodeUrl));
       if (geocodeResponse.statusCode == 200) {
@@ -134,7 +216,7 @@ class ApiService {
   }
 
   Future<List<String>> getNearbyBuildings(double lat, double lng) async {
-    final mapsApiKey = const String.fromEnvironment('MAPS_API_KEY');
+    const mapsApiKey = String.fromEnvironment('MAPS_API_KEY');
     List<String> placeIds = [];
     if (mapsApiKey.isEmpty) return placeIds;
     try {

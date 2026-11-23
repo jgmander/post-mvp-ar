@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -249,17 +250,25 @@ class AuthService {
     if (user == null) return;
     final uid = user.uid;
 
-    // 1. Delete all posts owned by this user
-    final posts = await FirebaseFirestore.instance
-        .collection('posts')
-        .where('owner_id', isEqualTo: uid)
-        .get();
-    for (final doc in posts.docs) {
-      await doc.reference.delete();
+    // 1. Delete all posts owned by this user via the authenticated backend
+    // (Direct client deletes on /posts are blocked by firestore.rules).
+    final bulkDeleted = await ApiService().deleteMyPosts();
+    if (!bulkDeleted) {
+      final posts = await FirebaseFirestore.instance
+          .collection('posts')
+          .where('owner_id', isEqualTo: uid)
+          .get();
+      for (final doc in posts.docs) {
+        await ApiService().deletePost(doc.id);
+      }
     }
 
-    // 2. Delete user document
-    await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+    // 2. Delete user document (best-effort so Auth deletion is never blocked)
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+    } catch (e) {
+      print('Warning deleting user profile doc: $e');
+    }
 
     // 3. Clear local SharedPreferences (hidden posts etc.)
     final prefs = await SharedPreferences.getInstance();
