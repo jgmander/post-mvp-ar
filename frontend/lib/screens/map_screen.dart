@@ -1184,7 +1184,9 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   }
 
   void _showSaveItToast(String createdPostId) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    final rootCtx = Navigator.of(context, rootNavigator: true).context;
+    messenger.showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 7),
         behavior: SnackBarBehavior.floating,
@@ -1200,18 +1202,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           side: const BorderSide(color: Color(0xFF252D3F), width: 1),
         ),
         content: const Text(
-          'Live for 24h! Want this tip pinned forever?',
+          'Live for Today! Want this tip pinned Forever?',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
         action: SnackBarAction(
           label: 'Keep Forever',
           textColor: const Color(0xFF00E5FF),
           onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            showPostLoginBottomSheet(
-              context,
-              pendingPostIdToClaim: createdPostId,
-            );
+            messenger.hideCurrentSnackBar();
+            if (rootCtx.mounted) {
+              showPostLoginBottomSheet(
+                rootCtx,
+                pendingPostIdToClaim: createdPostId,
+              );
+            }
           },
         ),
       ),
