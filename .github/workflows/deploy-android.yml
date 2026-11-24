@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Auto-bump version code
+      - name: Prepare next version code
         working-directory: ${{ github.workspace }}
         run: |
           SEMVER=$(grep "^version:" frontend/pubspec.yaml | sed -E 's/^version: ([0-9]+\.[0-9]+\.[0-9]+)\+.*/\1/')
@@ -36,23 +36,64 @@ jobs:
           NEXT=$((CURRENT + 1))
           sed -i "s/version: ${SEMVER}+${CURRENT}/version: ${SEMVER}+${NEXT}/" frontend/pubspec.yaml
           echo "VERSION_CODE=${NEXT}" >> $GITHUB_ENV
-          git config user.email "ci@post.co"
-          git config user.name "GitHub Actions"
-          git add frontend/pubspec.yaml
-          git commit -m "ci: auto-bump version code to ${NEXT} [skip ci]"
-          git push
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
+          cache: 'gradle'
+
+      - name: Configure GCS Maven Central Mirror & Gradle Retries
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat << 'EOF' > ~/.gradle/init.d/gcs-maven-mirror.init.gradle
+          def gcsMirror = java.net.URI.create("https://maven-central.storage-download.googleapis.com/maven2/")
+          settingsEvaluated { settings ->
+              settings.pluginManagement.repositories { RepositoryHandler repos ->
+                  if (repos.isEmpty()) {
+                      repos.maven { url = gcsMirror }
+                      repos.google()
+                      repos.gradlePluginPortal()
+                  } else {
+                      def mirror = repos.maven { url = gcsMirror }
+                      repos.remove(mirror)
+                      repos.addFirst(mirror)
+                  }
+              }
+              settings.dependencyResolutionManagement.repositories { RepositoryHandler repos ->
+                  if (!repos.isEmpty()) {
+                      def mirror = repos.maven { url = gcsMirror }
+                      repos.remove(mirror)
+                      repos.addFirst(mirror)
+                  }
+              }
+          }
+          projectsLoaded { gradle ->
+              gradle.allprojects { proj ->
+                  proj.buildscript.repositories { RepositoryHandler repos ->
+                      if (!repos.isEmpty()) {
+                          def mirror = repos.maven { url = gcsMirror }
+                          repos.remove(mirror)
+                          repos.addFirst(mirror)
+                      }
+                  }
+              }
+          }
+          EOF
+          cat << 'EOF' >> ~/.gradle/gradle.properties
+          systemProp.org.gradle.internal.http.connectionTimeout=120000
+          systemProp.org.gradle.internal.http.socketTimeout=120000
+          systemProp.org.gradle.internal.repository.max.tentatives=6
+          systemProp.org.gradle.internal.repository.initial.backoff=2000
+          EOF
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.41.9'
           channel: 'stable'
+          cache: true
 
       - name: Decode Android Keystore
         env:
@@ -119,13 +160,14 @@ jobs:
         if: always()
         run: rm -f android/app/key.jks
 
-      - name: Stamp deploy timestamp to sprint doc
+      - name: Commit bumped version code and deploy timestamp
         if: success()
         run: |
           cd ${{ github.workspace }}
           echo "Last Android deploy: $(date -u '+%Y-%m-%d %H:%M UTC') — commit ${{ github.sha }} ✅" >> .agent/current_sprint.md
           git config user.email "ci@post.co"
           git config user.name "GitHub Actions"
-          git add .agent/current_sprint.md
-          git commit -m "ci: stamp android deploy timestamp [skip ci]" || true
+          git add frontend/pubspec.yaml .agent/current_sprint.md
+          git commit -m "ci: release android build ${VERSION_CODE} and stamp deploy timestamp [skip ci]" || true
+          git pull --rebase origin main || true
           git push || true
