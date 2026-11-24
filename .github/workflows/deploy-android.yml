@@ -8,11 +8,15 @@ on:
       - 'frontend/**'
       - 'plugins/**'
       - '.github/workflows/deploy-android.yml'
+    paths-ignore:
+      - 'frontend/ios/**'
+      - 'frontend/macos/**'
   workflow_dispatch:
 
 
 jobs:
   build_and_distribute:
+    if: "!contains(github.event.head_commit.message, '[ios-only]')"
     runs-on: ubuntu-24.04
     permissions:
       contents: 'write'
@@ -144,7 +148,8 @@ jobs:
         run: |
           firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk \
             --app ${{ secrets.FIREBASE_APP_ID }} \
-            --groups "internal-testers"
+            --groups "internal-testers" \
+            --release-notes-file release_notes.txt
 
       # ── Upload AAB to Play Store Internal Track ──
       - name: Upload AAB to Play Store (Internal Track)

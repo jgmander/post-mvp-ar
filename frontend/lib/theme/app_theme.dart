@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Central color and theme constants for Post Spatial.
+/// Central color and theme constants for Post Spatial (v1.1.1 Electric Post Blue).
 /// All UI files import from here. Never hardcode colors elsewhere.
 /// iOS and Android share this file identically — one source of truth.
 class AppColors {

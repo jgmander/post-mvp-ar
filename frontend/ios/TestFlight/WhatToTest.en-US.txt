@@ -1,0 +1,11 @@
+Post Spatial v1.1.1 - What's New & What to Test
+
+What's New:
+1. 3D Building Bumper Stickers: Storefront and building-anchored posts now render as die-cut vinyl signs instead of spheres. They angle gently toward you as you walk down the sidewalk and smoothly turn flat against the wall when you stand in front of the building.
+2. Signature Electric Post Blue + Post 'P' Mark: Upgraded orbs, stickers, AR aiming reticle, and 3D map pins to Electric Post Blue with our custom folded-note 'P' brand stamp, plus a white sky-contrast halo around Sky Balloons for bright daylight skies.
+3. 3x Larger Labels & Thicker Balloon String: Scaled 3D text 3x larger with smart 2-line wrapping and distance legibility boost, thickened the Sky Balloon tether 3x with a bright white inner core, and added a dark pill behind the top-right accuracy badge for bright facades.
+
+What to Test:
+- Walk past existing storefront posts (or aim at a building facade until "Stick to Building" lights up and drop a new post) and verify the sticker angles toward you from down the block and rotates flat in front of the entrance.
+- Drop or view a Sky Balloon in daylight and at dusk to check the thicker glowing tether string and white sky-contrast rim.
+- Verify the top-right meter accuracy badge stays easy to read against bright white walls and open sky.
