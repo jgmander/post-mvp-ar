@@ -6,11 +6,10 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - '!frontend/ios/**'
+      - '!frontend/macos/**'
       - 'plugins/**'
       - '.github/workflows/deploy-android.yml'
-    paths-ignore:
-      - 'frontend/ios/**'
-      - 'frontend/macos/**'
   workflow_dispatch:
 
 
