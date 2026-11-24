@@ -1,5 +1,5 @@
 # Agent Rules — Post Spatial AR
-Last updated: 2026-06-20
+Last updated: 2026-11-24
 
 These rules exist to prevent regressions on hard-won fixes. Every agent working on this codebase must read and follow them.
 
@@ -87,4 +87,15 @@ Whenever Flutter dependencies (especially Firebase SDK, Google Maps, or native p
 1. Always run `flutter pub get` and `cd frontend/ios && pod update <PodName>` (or `pod install --repo-update`) locally.
 2. Verify and commit the resulting `frontend/ios/Podfile.lock`.
 3. Xcode Cloud runs `pod install` in `ci_post_clone.sh` which strictly adheres to `Podfile.lock`. Out-of-sync snapshot constraints (e.g., `Firebase/CoreOnly` version mismatches) will fail the CI build immediately.
+
+---
+
+## RULE 9: Keep Marketing Version (`1.1.1`) Fixed Until Public App Store Release
+
+Do **NOT** bump the semantic/marketing version (`1.1.1` in `frontend/pubspec.yaml` and `MARKETING_VERSION` in `frontend/ios/Runner.xcodeproj/project.pbxproj`) on iterative TestFlight or internal builds.
+
+- **Why:** Apple TestFlight gates External Testing (`FV` Founding Visionaries, `MF`, `XO`) with a full human Beta App Review (`Waiting for Review`, ~6-24 hours) on the **first build of every new marketing version** (`CFBundleShortVersionString`). Once `1.1.1` (Build 72) clears Beta App Review, all subsequent builds under `1.1.1` (`Build 73`, `Build 74`, `Build 75`, ... on iOS and `1.1.1+49`, `1.1.1+50`, ... on Android) bypass human Beta App Review and go straight to `Testing` for all 6 testers automatically.
+- **When to bump:** Only bump `1.1.1` -> `1.1.2` / `1.2.0` **after** `1.1.1` has been approved and released on the public Apple App Store (which closes the `1.1.1` train via `ITMS-90186`).
+- **Next iOS touch:** Add `<key>ITSAppUsesNonExemptEncryption</key><false/>` to `frontend/ios/Runner/Info.plist` on the next planned code push (do not push an isolated `Info.plist` commit while Build 72 is waiting for review).
+
 
