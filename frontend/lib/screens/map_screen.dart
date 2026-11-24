@@ -23,8 +23,8 @@ class _PostColors {
   static const bg         = Color(0xFF0D0F14);
   static const surface    = Color(0xFF161B25);
   static const surfaceAlt = Color(0xFF1E2433);
-  static const brand      = Color(0xFF4F8EF7);
-  static const brandDim   = Color(0xFF2A4E8C);
+  static const brand      = Color(0xFF1A8CFF);
+  static const brandDim   = Color(0xFF184B8C);
   static const accent     = Color(0xFFE8A838);
   static const textPrimary   = Color(0xFFF0F4FF);
   static const textSecondary = Color(0xFF8896B0);
@@ -205,22 +205,75 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
-  // ─── Social Pin & Cluster Markers ──────────────────────────────
+  // ─── Social Pin & Cluster Markers (Signature Folded-Note 'P' Mark) ─────────
   Future<BitmapDescriptor> _buildSocialMarker() async {
-    const double size = 40.0;
+    const double size = 54.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
 
-    canvas.drawShadow(Path()..addOval(Rect.fromLTWH(0,0,size,size)), Colors.black, 8.0, false);
-    canvas.drawCircle(const Offset(size/2, size/2), size/2, Paint()..color = _PostColors.brand);
-    
-    // Icon or Initial
-    final tp = TextPainter(
-      text: const TextSpan(text: 'P', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
-      textDirection: TextDirection.ltr,
+    final left = size * 0.13;
+    final right = size * 0.87;
+    final top = size * 0.08;
+    final bottom = size * 0.78;
+    final radius = size * 0.15;
+    final fold = size * 0.24;
+
+    final notePath = Path()
+      ..moveTo(left + radius, top)
+      ..lineTo(right - fold, top)
+      ..lineTo(right, top + fold)
+      ..lineTo(right, bottom - radius)
+      ..quadraticBezierTo(right, bottom, right - radius, bottom)
+      ..lineTo(size * 0.60, bottom)
+      ..lineTo(size * 0.50, size * 0.95)
+      ..lineTo(size * 0.40, bottom)
+      ..lineTo(left + radius, bottom)
+      ..quadraticBezierTo(left, bottom, left, bottom - radius)
+      ..lineTo(left, top + radius)
+      ..quadraticBezierTo(left, top, left + radius, top)
+      ..close();
+
+    canvas.drawShadow(notePath, Colors.black, 8.0, false);
+    canvas.drawPath(notePath, Paint()..color = _PostColors.brand);
+    canvas.drawPath(
+      notePath,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.8
+        ..strokeJoin = StrokeJoin.round,
     );
-    tp.layout();
-    tp.paint(canvas, Offset((size - tp.width) / 2, (size - tp.height) / 2));
+
+    final flapPath = Path()
+      ..moveTo(right - fold, top)
+      ..lineTo(right - fold, top + fold * 0.78)
+      ..quadraticBezierTo(right - fold, top + fold, right - fold * 0.78, top + fold)
+      ..lineTo(right, top + fold)
+      ..close();
+    canvas.drawPath(flapPath, Paint()..color = Colors.white.withValues(alpha: 0.92));
+
+    final pPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size * 0.105
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final stemX = size * 0.36;
+    final stemTop = size * 0.27;
+    final stemBottom = size * 0.63;
+    final bowlMidY = size * 0.46;
+    final bowlRight = size * 0.57;
+    final pPath = Path()
+      ..moveTo(stemX, stemBottom)
+      ..lineTo(stemX, stemTop)
+      ..lineTo(bowlRight - (bowlMidY - stemTop) * 0.5, stemTop)
+      ..arcToPoint(
+        Offset(bowlRight - (bowlMidY - stemTop) * 0.5, bowlMidY),
+        radius: Radius.circular((bowlMidY - stemTop) * 0.5),
+        clockwise: true,
+      )
+      ..lineTo(stemX, bowlMidY);
+    canvas.drawPath(pPath, pPaint);
 
     final img = await recorder.endRecording().toImage(size.toInt(), size.toInt());
     final bytes = await img.toByteData(format: ui.ImageByteFormat.png);

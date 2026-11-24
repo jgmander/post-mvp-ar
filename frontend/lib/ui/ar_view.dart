@@ -15,6 +15,7 @@ import '../services/auth_service.dart';
 import '../services/moderation_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/login_bottom_sheet.dart';
+import '../widgets/post_brand_mark.dart';
 import 'ar_onboarding_overlay.dart';
 
 class ArView extends StatefulWidget {
@@ -364,8 +365,8 @@ class _ArViewState extends State<ArView>
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.cyanAccent,
-              foregroundColor: Colors.black,
+              backgroundColor: AppColors.ownPost,
+              foregroundColor: Colors.white,
             ),
             child: const Text('Return to Map'),
           ),
@@ -635,19 +636,19 @@ class _ArViewState extends State<ArView>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.cyanAccent.withValues(alpha: 0.12),
+                        color: AppColors.accent.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.4)),
+                        border: Border.all(color: AppColors.accent.withValues(alpha: 0.45)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.my_location_rounded, color: Colors.cyanAccent, size: 14),
+                          const Icon(Icons.my_location_rounded, color: AppColors.accent, size: 14),
                           const SizedBox(width: 6),
                           Text(
                             lockSummary,
                             style: const TextStyle(
-                              color: Colors.cyanAccent,
+                              color: AppColors.accent,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
@@ -660,8 +661,8 @@ class _ArViewState extends State<ArView>
                     if (placeName.isNotEmpty && placeName != 'Unknown Location')
                       Row(
                         children: [
-                          const Icon(Icons.location_pin, color: Colors.cyanAccent, size: 24),
-                          const SizedBox(width: 6),
+                          const PostBrandMark(size: 26),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               placeName,
@@ -694,7 +695,7 @@ class _ArViewState extends State<ArView>
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.cyanAccent),
+                          borderSide: const BorderSide(color: AppColors.accent),
                         ),
                       ),
                       dropdownColor: const Color(0xFF1A1A2E),
@@ -703,7 +704,7 @@ class _ArViewState extends State<ArView>
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
-                      icon: const Icon(Icons.keyboard_arrow_down, color: Colors.cyanAccent),
+                      icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.accent),
                       items: quickMessages
                           .map((msg) => DropdownMenuItem(value: msg, child: Text(msg)))
                           .toList(),
@@ -721,21 +722,27 @@ class _ArViewState extends State<ArView>
                     ),
                     const SizedBox(height: 14),
 
-                    // Post Type Selection (Storefront/Eye-Level Pin vs Sky Balloon)
+                    // Post Type Selection (Building Sticker / Ground Pin vs Sky Balloon)
                     Row(
                       children: [
                         Expanded(
                           child: ChoiceChip(
-                            label: const Center(child: Text('📍 Spot Pin')),
+                            label: Center(
+                              child: Text(
+                                anchorSurface == 'building'
+                                    ? '🏷️ Building Sticker'
+                                    : '📍 Ground Pin',
+                              ),
+                            ),
                             selected: selectedPostType == 'pin',
                             onSelected: (val) {
                               if (val) setModalState(() => selectedPostType = 'pin');
                             },
-                            selectedColor: Colors.cyanAccent,
+                            selectedColor: AppColors.ownPost,
                             backgroundColor: Colors.black45,
-                            labelStyle: TextStyle(
+                            labelStyle: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: selectedPostType == 'pin' ? Colors.black : Colors.white,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -747,11 +754,11 @@ class _ArViewState extends State<ArView>
                             onSelected: (val) {
                               if (val) setModalState(() => selectedPostType = 'balloon');
                             },
-                            selectedColor: Colors.cyanAccent,
+                            selectedColor: AppColors.ownPost,
                             backgroundColor: Colors.black45,
-                            labelStyle: TextStyle(
+                            labelStyle: const TextStyle(
                               fontWeight: FontWeight.w700,
-                              color: selectedPostType == 'balloon' ? Colors.black : Colors.white,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -770,11 +777,11 @@ class _ArViewState extends State<ArView>
                               onSelected: (val) {
                                 if (val) setModalState(() => isPermanent = true);
                               },
-                              selectedColor: Colors.cyanAccent.withValues(alpha: 0.9),
+                              selectedColor: AppColors.ownPost,
                               backgroundColor: Colors.black45,
                               labelStyle: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: isPermanent ? Colors.black : Colors.white70,
+                                color: isPermanent ? Colors.white : Colors.white70,
                               ),
                             ),
                           ),
@@ -836,7 +843,7 @@ class _ArViewState extends State<ArView>
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: Colors.cyanAccent),
+                          borderSide: const BorderSide(color: AppColors.accent),
                         ),
                       ),
                       maxLines: 2,
@@ -844,7 +851,7 @@ class _ArViewState extends State<ArView>
                     const SizedBox(height: 18),
 
                     isSubmitting
-                        ? const Center(child: CircularProgressIndicator(color: Colors.cyanAccent))
+                        ? const Center(child: CircularProgressIndicator(color: AppColors.accent))
                         : SizedBox(
                             width: double.infinity,
                             height: 52,
@@ -923,6 +930,7 @@ class _ArViewState extends State<ArView>
                                         postAlt,
                                         label: created.messageContent,
                                         isLive24h: created.isLive24h,
+                                        anchorSurface: created.anchorSurface ?? anchorSurface,
                                       );
                                     } catch (_) {
                                       _renderedPostIds.remove(nodeName);
@@ -942,6 +950,9 @@ class _ArViewState extends State<ArView>
                                         '🎈 Sky Balloon Anchored · Tilt Up Along the Tether!',
                                         duration: const Duration(milliseconds: 4300),
                                       );
+                                    } else if (anchorSurface == 'building') {
+                                      final suffix = effectivePermanent ? 'Forever' : 'Today';
+                                      _showDropSuccessBanner('🏷️ Sticker Stuck ($suffix) · $resolvedPlace');
                                     } else {
                                       final bannerPrefix = effectivePermanent
                                           ? '📌 Pinned Forever'
@@ -987,10 +998,11 @@ class _ArViewState extends State<ArView>
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.cyanAccent,
-                                foregroundColor: Colors.black,
+                                backgroundColor: AppColors.ownPost,
+                                foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
+                                  side: BorderSide(color: Colors.white.withValues(alpha: 0.7), width: 1.2),
                                 ),
                                 elevation: 6,
                               ),
@@ -1036,7 +1048,7 @@ class _ArViewState extends State<ArView>
         backgroundColor: const Color(0xFF161B25),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.cyanAccent.withValues(alpha: 0.45)),
+          side: BorderSide(color: AppColors.accent.withValues(alpha: 0.5)),
         ),
         content: const Text(
           'Live for Today! Want this tip pinned Forever?',
@@ -1044,7 +1056,7 @@ class _ArViewState extends State<ArView>
         ),
         action: SnackBarAction(
           label: 'Keep Forever',
-          textColor: Colors.cyanAccent,
+          textColor: AppColors.accent,
           onPressed: () {
             messenger.hideCurrentSnackBar();
             if (rootCtx.mounted) {
@@ -1126,13 +1138,15 @@ class _ArViewState extends State<ArView>
                     decoration: BoxDecoration(
                       color: post.isLive24h
                           ? AppColors.liveAmber.withValues(alpha: 0.16)
-                          : Colors.cyanAccent.withValues(alpha: 0.14),
+                          : AppColors.accent.withValues(alpha: 0.16),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      post.isLive24h ? '⚡ Today' : '📌 Forever',
+                      post.isLive24h
+                          ? '⚡ Today'
+                          : (post.anchorSurface == 'building' ? '🏷️ Building Sticker' : '📌 Forever'),
                       style: TextStyle(
-                        color: post.isLive24h ? AppColors.liveAmber : Colors.cyanAccent,
+                        color: post.isLive24h ? AppColors.liveAmber : AppColors.accent,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1175,17 +1189,20 @@ class _ArViewState extends State<ArView>
                       : 'Walk Here',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.cyanAccent,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppColors.ownPost,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(44),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.65)),
+                  ),
                 ),
               ),
             ],
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.send, color: Colors.cyanAccent),
+              icon: const Icon(Icons.send, color: AppColors.accent),
               tooltip: 'Share',
               onPressed: () {
                 final place =
@@ -1292,7 +1309,9 @@ class _ArViewState extends State<ArView>
       final currentUserId = AuthService().currentUser?.uid ?? '';
       final isOwn = post.creatorId == currentUserId || post.ownerId == currentUserId;
       final material = ArCoreMaterial(
-        color: (isOwn ? AppColors.ownPost : AppColors.othersPost).withValues(alpha: 0.85),
+        color: (isOwn ? AppColors.ownPost : AppColors.othersPost).withValues(alpha: 0.94),
+        roughness: 0.22,
+        reflectance: 0.85,
       );
       final radius = post.postType == 'balloon' ? AppSizes.balloonRadius : AppSizes.pinRadius;
       final sphere = ArCoreSphere(materials: [material], radius: radius);
@@ -1306,7 +1325,7 @@ class _ArViewState extends State<ArView>
             : AppSizes.pinAltitude;
       }
 
-      // RULE 2: Always render via resolveAnchorOnTerrainAsync (+ floating 3D label!).
+      // RULE 2: Always render via resolveAnchorOnTerrainAsync (+ floating 3D label / building sticker!).
       // Catch synchronous platform errors so _renderedPostIds never wedges a post.
       arCoreController
           .resolveAnchorOnTerrainAsync(
@@ -1316,6 +1335,7 @@ class _ArViewState extends State<ArView>
             altOffset,
             label: post.messageContent,
             isLive24h: post.isLive24h,
+            anchorSurface: post.anchorSurface,
           )
           .catchError((_) {
         _renderedPostIds.remove(postId);
@@ -1560,7 +1580,7 @@ class _ArViewState extends State<ArView>
                           ),
                         ),
 
-                      // ── CENTER CROSSHAIR RETICLE ──
+                      // ── CENTER CROSSHAIR RETICLE (Custom Trademark-Distinct Post Mark) ──
                       Center(
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
@@ -1575,20 +1595,18 @@ class _ArViewState extends State<ArView>
                               animation: _reticleGlowAnimation,
                               builder: (context, child) {
                                 final isLocked = hasVPS && (hasSurfaceTarget || _isAuraTargetingBuilding);
-                                return Icon(
-                                  Icons.location_pin,
-                                  color: isLocked
-                                      ? Colors.cyanAccent
-                                      : (hasVPS ? Colors.white : Colors.white54),
-                                  size: isLocked ? 48 : 38,
-                                  shadows: isLocked
-                                      ? [
-                                          Shadow(
-                                            color: Colors.cyanAccent.withValues(alpha: 0.65),
-                                            blurRadius: 22,
-                                          ),
-                                        ]
-                                      : [],
+                                return PostBrandMark(
+                                  size: isLocked ? 50 : 40,
+                                  fillColor: isLocked
+                                      ? AppColors.ownPost
+                                      : (hasVPS
+                                          ? AppColors.ownPost.withValues(alpha: 0.72)
+                                          : Colors.white24),
+                                  borderColor: hasVPS ? Colors.white : Colors.white54,
+                                  glyphColor: hasVPS ? Colors.white : Colors.white70,
+                                  glowColor: isLocked
+                                      ? AppColors.accent.withValues(alpha: 0.65)
+                                      : null,
                                 );
                               },
                             ),
@@ -1606,11 +1624,11 @@ class _ArViewState extends State<ArView>
                             decoration: BoxDecoration(
                               color: Colors.black87,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.5)),
+                              border: Border.all(color: AppColors.accent.withValues(alpha: 0.55)),
                             ),
                             child: const Row(
                               children: [
-                                Icon(Icons.camera_alt_outlined, color: Colors.cyanAccent, size: 28),
+                                Icon(Icons.camera_alt_outlined, color: AppColors.accent, size: 28),
                                 SizedBox(width: 16),
                                 Expanded(
                                   child: Text(
@@ -1640,12 +1658,12 @@ class _ArViewState extends State<ArView>
                                 height: size,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: Colors.cyanAccent.withValues(alpha: 0.2 + _holdProgress * 0.3),
-                                  border: Border.all(color: Colors.cyanAccent, width: 2),
+                                  color: AppColors.ownPost.withValues(alpha: 0.25 + _holdProgress * 0.35),
+                                  border: Border.all(color: Colors.white, width: 2),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.cyanAccent.withValues(
-                                        alpha: 0.3 + _holdProgress * 0.4,
+                                      color: AppColors.accent.withValues(
+                                        alpha: 0.35 + _holdProgress * 0.4,
                                       ),
                                       blurRadius: 20 + _holdProgress * 30,
                                       spreadRadius: 5 + _holdProgress * 15,
@@ -1665,7 +1683,7 @@ class _ArViewState extends State<ArView>
                             child: CircularProgressIndicator(
                               value: _holdProgress,
                               strokeWidth: 3,
-                              color: Colors.cyanAccent,
+                              color: AppColors.accent,
                               backgroundColor: Colors.white12,
                             ),
                           ),
@@ -1676,7 +1694,7 @@ class _ArViewState extends State<ArView>
                           child: Container(
                             decoration: BoxDecoration(
                               border: Border.all(
-                                color: Colors.cyanAccent.withValues(alpha: 0.25),
+                                color: AppColors.accent.withValues(alpha: 0.32),
                                 width: 3,
                               ),
                             ),
@@ -1724,14 +1742,13 @@ class _ArViewState extends State<ArView>
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: hasVPS
-                                        ? Colors.cyanAccent.withValues(alpha: 0.15)
-                                        : Colors.redAccent.withValues(alpha: 0.15),
+                                    color: const Color(0xFF0B1222).withValues(alpha: 0.86),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
                                       color: hasVPS
-                                          ? Colors.cyanAccent.withValues(alpha: 0.4)
-                                          : Colors.redAccent.withValues(alpha: 0.4),
+                                          ? AppColors.accent.withValues(alpha: 0.85)
+                                          : Colors.redAccent.withValues(alpha: 0.65),
+                                      width: 1.4,
                                     ),
                                   ),
                                   child: Row(
@@ -1739,16 +1756,16 @@ class _ArViewState extends State<ArView>
                                     children: [
                                       Icon(
                                         hasVPS ? Icons.gps_fixed : Icons.gps_not_fixed,
-                                        color: hasVPS ? Colors.cyanAccent : Colors.redAccent,
+                                        color: hasVPS ? AppColors.accent : Colors.redAccent,
                                         size: 16,
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
                                         '${(_currentPose!['accuracy'] as num).toStringAsFixed(1)}m',
                                         style: TextStyle(
-                                          color: hasVPS ? Colors.cyanAccent : Colors.redAccent,
+                                          color: hasVPS ? Colors.white : Colors.redAccent,
                                           fontSize: 13,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
                                     ],
@@ -1769,16 +1786,16 @@ class _ArViewState extends State<ArView>
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0D1220).withValues(alpha: 0.92),
+                                color: const Color(0xFF0D1220).withValues(alpha: 0.94),
                                 borderRadius: BorderRadius.circular(24),
                                 border: Border.all(
-                                  color: Colors.cyanAccent.withValues(alpha: 0.75),
+                                  color: Colors.white.withValues(alpha: 0.85),
                                   width: 1.5,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.cyanAccent.withValues(alpha: 0.25),
-                                    blurRadius: 16,
+                                    color: AppColors.ownPost.withValues(alpha: 0.45),
+                                    blurRadius: 18,
                                   ),
                                 ],
                               ),
@@ -1787,7 +1804,7 @@ class _ArViewState extends State<ArView>
                                 children: [
                                   const Icon(
                                     Icons.check_circle_rounded,
-                                    color: Colors.cyanAccent,
+                                    color: AppColors.accent,
                                     size: 18,
                                   ),
                                   const SizedBox(width: 8),
@@ -1819,14 +1836,14 @@ class _ArViewState extends State<ArView>
                               ? Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0D1220).withValues(alpha: 0.9),
+                                    color: const Color(0xFF0D1220).withValues(alpha: 0.92),
                                     borderRadius: BorderRadius.circular(28),
-                                    border: Border.all(color: Colors.cyanAccent),
+                                    border: Border.all(color: AppColors.accent, width: 1.5),
                                   ),
                                   child: Text(
                                     'Locking target... ${(_holdProgress * 100).toInt()}%',
                                     style: const TextStyle(
-                                      color: Colors.cyanAccent,
+                                      color: Colors.white,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w700,
                                     ),
@@ -1850,16 +1867,20 @@ class _ArViewState extends State<ArView>
                                         ),
                                       ),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.cyanAccent,
-                                        foregroundColor: const Color(0xFF0A0E1A),
+                                        backgroundColor: AppColors.ownPost,
+                                        foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 24,
                                           vertical: 14,
                                         ),
                                         elevation: 8,
-                                        shadowColor: Colors.cyanAccent.withValues(alpha: 0.45),
+                                        shadowColor: AppColors.ownPost.withValues(alpha: 0.55),
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(28),
+                                          side: BorderSide(
+                                            color: Colors.white.withValues(alpha: 0.85),
+                                            width: 1.6,
+                                          ),
                                         ),
                                       ),
                                     )
@@ -1881,7 +1902,7 @@ class _ArViewState extends State<ArView>
                                             height: 14,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              color: Colors.cyanAccent,
+                                              color: AppColors.accent,
                                             ),
                                           ),
                                           SizedBox(width: 10),

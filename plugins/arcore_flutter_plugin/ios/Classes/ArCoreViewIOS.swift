@@ -653,7 +653,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             cam.zFar = 500.0
         }
 
-        // ~4Hz proximity LOD check for floating 3D caption pills (prevents clutter at distance)
+        // ~4Hz proximity LOD + smooth distance-legibility boost for 3D stickers & caption cards
         if earthFrameCounter % 15 == 0 {
             let camCol = frame.camera.transform.columns.3
             let camPos = simd_float3(camCol.x, camCol.y, camCol.z)
@@ -668,7 +668,14 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                         let worldCol = meta.labelNode.simdWorldTransform.columns.3
                         let labelPos = simd_float3(worldCol.x, worldCol.y, worldCol.z)
                         let dist = simd_distance(camPos, labelPos)
-                        meta.labelNode.isHidden = dist > meta.maxDistance
+                        let visible = dist <= meta.maxDistance
+                        meta.labelNode.isHidden = !visible
+                        if visible && meta.maxDistance < 100.0 {
+                            // Keep close-range (<8m) stickers compact on storefronts, then smoothly boost
+                            // up to 2.25x at down-the-block distances (15m-50m) for 3x street legibility!
+                            let boost = min(2.25, max(1.0, 1.0 + (dist - 8.0) * 0.042))
+                            meta.labelNode.simdScale = simd_float3(repeating: boost)
+                        }
                     }
                 }
             }
@@ -875,7 +882,7 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
 
     private func createSphereNode(name: String, map: [String: Any]) -> SCNNode {
         var radius: CGFloat = 0.3
-        var r: CGFloat = 0, g: CGFloat = 0.90, b: CGFloat = 1.0, a: CGFloat = 0.88
+        var r: CGFloat = 0.10, g: CGFloat = 0.55, b: CGFloat = 1.0, a: CGFloat = 0.94
 
         // Parse shape from Flutter args (ArCoreMaterial serializes color as [alpha, red, green, blue])
         if let shapeMap = map["shape"] as? [String: Any] {
@@ -888,81 +895,337 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
                     g = CGFloat(colorArr[2].doubleValue) / 255.0
                     b = CGFloat(colorArr[3].doubleValue) / 255.0
                 } else if let colorMap = firstMat["color"] as? [String: Any] {
-                    r = CGFloat((colorMap["r"] as? NSNumber)?.doubleValue ?? 0) / 255.0
-                    g = CGFloat((colorMap["g"] as? NSNumber)?.doubleValue ?? 230) / 255.0
+                    r = CGFloat((colorMap["r"] as? NSNumber)?.doubleValue ?? 26) / 255.0
+                    g = CGFloat((colorMap["g"] as? NSNumber)?.doubleValue ?? 140) / 255.0
                     b = CGFloat((colorMap["b"] as? NSNumber)?.doubleValue ?? 255) / 255.0
-                    a = CGFloat((colorMap["a"] as? NSNumber)?.doubleValue ?? 230) / 255.0
+                    a = CGFloat((colorMap["a"] as? NSNumber)?.doubleValue ?? 240) / 255.0
                 }
             }
         }
 
+        let anchorSurface = (map["anchorSurface"] as? String)?.lowercased() ?? ""
+        let isBalloon = radius > 1.2
+        let isBuildingSticker = !isBalloon && anchorSurface == "building"
+
+        // Building posts render as 3D Die-Cut Bumper Sticker Signs (no sphere orb).
+        if isBuildingSticker {
+            let container = SCNNode()
+            container.name = name
+            return container
+        }
+
         let sphere = SCNSphere(radius: radius)
+        sphere.segmentCount = 48
         sphere.firstMaterial?.diffuse.contents = UIColor(red: r, green: g, blue: b, alpha: a)
+        // Self-illumination keeps Electric Post Blue vivid at night and in storefront shadows
+        sphere.firstMaterial?.emission.contents = UIColor(
+            red: min(1.0, r * 0.46 + 0.04),
+            green: min(1.0, g * 0.46 + 0.06),
+            blue: min(1.0, b * 0.48 + 0.08),
+            alpha: 1.0
+        )
         sphere.firstMaterial?.lightingModel = .physicallyBased
-        sphere.firstMaterial?.metalness.contents = 0.3
-        sphere.firstMaterial?.roughness.contents = 0.4
+        sphere.firstMaterial?.metalness.contents = 0.12
+        sphere.firstMaterial?.roughness.contents = 0.22
 
         let node = SCNNode(geometry: sphere)
         node.name = name
+
+        // Sky-safe contrast rim on Sky Balloons so Electric Post Blue pops against bright daytime blue sky
+        if isBalloon {
+            let halo = SCNTorus(ringRadius: radius * 1.04, pipeRadius: 0.085)
+            halo.firstMaterial?.diffuse.contents = UIColor(white: 1.0, alpha: 0.95)
+            halo.firstMaterial?.lightingModel = .constant
+            let haloNode = SCNNode(geometry: halo)
+            haloNode.name = name
+            haloNode.eulerAngles = SCNVector3(0.24, 0, 0.10)
+            node.addChildNode(haloNode)
+        }
+
         return node
+    }
+
+    /// Wraps a caption into 1 or 2 balanced lines for crisp 3x storefront legibility.
+    private func wrapSignLines(_ raw: String, maxLineChars: Int = 16, maxTotalChars: Int = 46) -> [String] {
+        let collapsed = raw
+            .replacingOccurrences(of: "\n", with: " ")
+            .split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+            .joined(separator: " ")
+        let capped = collapsed.count > maxTotalChars
+            ? String(collapsed.prefix(maxTotalChars - 1)).trimmingCharacters(in: .whitespaces) + "…"
+            : collapsed
+        if capped.count <= maxLineChars {
+            return [capped]
+        }
+        let words = capped.split(separator: " ").map(String.init)
+        if words.count <= 1 {
+            let mid = capped.index(capped.startIndex, offsetBy: min(maxLineChars, capped.count))
+            return [String(capped[..<mid]), String(capped[mid...])]
+        }
+        var line1 = ""
+        var splitIdx = 0
+        let target = capped.count / 2
+        for (idx, w) in words.enumerated() {
+            let candidate = line1.isEmpty ? w : "\(line1) \(w)"
+            if candidate.count <= max(maxLineChars, target + 4) && idx < words.count - 1 {
+                line1 = candidate
+                splitIdx = idx + 1
+            } else {
+                if line1.isEmpty {
+                    line1 = w
+                    splitIdx = 1
+                }
+                break
+            }
+        }
+        let remainder = words[splitIdx...].joined(separator: " ")
+        if remainder.isEmpty { return [line1] }
+        let cappedLine2 = remainder.count > maxLineChars + 4
+            ? String(remainder.prefix(maxLineChars + 3)).trimmingCharacters(in: .whitespaces) + "…"
+            : remainder
+        return [line1, cappedLine2]
+    }
+
+    /// Draws the trademark-distinct Post Folded-Note 'P' Spatial Mark in `rect`.
+    private func drawPostBrandStamp(
+        in rect: CGRect,
+        fillColor: UIColor,
+        glyphColor: UIColor,
+        borderColor: UIColor
+    ) {
+        let w = rect.width
+        let h = rect.height
+        let ox = rect.minX
+        let oy = rect.minY
+
+        let left = ox + w * 0.12
+        let right = ox + w * 0.88
+        let top = oy + h * 0.08
+        let bottom = oy + h * 0.79
+        let r = w * 0.15
+        let fold = w * 0.24
+
+        let note = UIBezierPath()
+        note.move(to: CGPoint(x: left + r, y: top))
+        note.addLine(to: CGPoint(x: right - fold, y: top))
+        note.addLine(to: CGPoint(x: right, y: top + fold))
+        note.addLine(to: CGPoint(x: right, y: bottom - r))
+        note.addQuadCurve(to: CGPoint(x: right - r, y: bottom), controlPoint: CGPoint(x: right, y: bottom))
+        note.addLine(to: CGPoint(x: ox + w * 0.60, y: bottom))
+        note.addLine(to: CGPoint(x: ox + w * 0.50, y: oy + h * 0.95))
+        note.addLine(to: CGPoint(x: ox + w * 0.40, y: bottom))
+        note.addLine(to: CGPoint(x: left + r, y: bottom))
+        note.addQuadCurve(to: CGPoint(x: left, y: bottom - r), controlPoint: CGPoint(x: left, y: bottom))
+        note.addLine(to: CGPoint(x: left, y: top + r))
+        note.addQuadCurve(to: CGPoint(x: left + r, y: top), controlPoint: CGPoint(x: left, y: top))
+        note.close()
+
+        fillColor.setFill()
+        note.fill()
+
+        borderColor.setStroke()
+        note.lineWidth = max(2.2, w * 0.055)
+        note.lineJoinStyle = .round
+        note.stroke()
+
+        // Folded top-right sticky-note dog-ear flap
+        let flap = UIBezierPath()
+        flap.move(to: CGPoint(x: right - fold, y: top))
+        flap.addLine(to: CGPoint(x: right - fold, y: top + fold * 0.78))
+        flap.addQuadCurve(
+            to: CGPoint(x: right - fold * 0.78, y: top + fold),
+            controlPoint: CGPoint(x: right - fold, y: top + fold)
+        )
+        flap.addLine(to: CGPoint(x: right, y: top + fold))
+        flap.close()
+        glyphColor.withAlphaComponent(0.92).setFill()
+        flap.fill()
+
+        // Bold geometric 'P' monogram
+        let stemX = ox + w * 0.36
+        let stemTop = oy + h * 0.27
+        let stemBottom = oy + h * 0.63
+        let bowlMidY = oy + h * 0.46
+        let bowlRadius = (bowlMidY - stemTop) * 0.5
+        let bowlCenterX = (ox + w * 0.57) - bowlRadius
+
+        let pPath = UIBezierPath()
+        pPath.move(to: CGPoint(x: stemX, y: stemBottom))
+        pPath.addLine(to: CGPoint(x: stemX, y: stemTop))
+        pPath.addLine(to: CGPoint(x: bowlCenterX, y: stemTop))
+        pPath.addArc(
+            withCenter: CGPoint(x: bowlCenterX, y: stemTop + bowlRadius),
+            radius: bowlRadius,
+            startAngle: -.pi / 2,
+            endAngle: .pi / 2,
+            clockwise: true
+        )
+        pPath.addLine(to: CGPoint(x: stemX, y: bowlMidY))
+
+        glyphColor.setStroke()
+        pPath.lineWidth = max(3.0, w * 0.108)
+        pPath.lineCapStyle = .round
+        pPath.lineJoinStyle = .round
+        pPath.stroke()
     }
 
     private func makePillPlaneNode(
         text: String,
         nodeName: String,
         isLive24h: Bool,
+        isBuildingSticker: Bool = false,
         planeHeight: CGFloat
     ) -> SCNNode {
-        let font = UIFont.systemFont(ofSize: 28, weight: .bold)
+        let lines = wrapSignLines(text)
+        let fontSize: CGFloat = isBuildingSticker ? 56 : 50
+        let font = UIFont.systemFont(ofSize: fontSize, weight: .heavy)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = isBuildingSticker ? .left : .center
+        paragraph.lineSpacing = 6
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: UIColor(red: 0.94, green: 0.96, blue: 1.0, alpha: 1.0)
+            .foregroundColor: UIColor.white,
+            .paragraphStyle: paragraph
         ]
-        let textSize = (text as NSString).size(withAttributes: attributes)
-        let hPad: CGFloat = 28
-        let vPad: CGFloat = 16
-        let imgWidth = ceil(textSize.width + hPad * 2)
-        let imgHeight = ceil(textSize.height + vPad * 2)
+        let joinedText = lines.joined(separator: "\n")
+        let measured = (joinedText as NSString).boundingRect(
+            with: CGSize(width: 1400, height: 600),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attributes,
+            context: nil
+        )
+        let textWidth = ceil(measured.width)
+        let textHeight = ceil(measured.height)
+
+        let postBlue = UIColor(red: 0.102, green: 0.549, blue: 1.0, alpha: 1.0)     // #1A8CFF
+        let liveAmber = UIColor(red: 1.0, green: 0.722, blue: 0.180, alpha: 1.0)    // #FFB82E
+        let darkSlate = UIColor(red: 0.043, green: 0.075, blue: 0.149, alpha: 0.96) // #0B1326
+
+        let borderInset: CGFloat = 10
+        let badgeTabWidth: CGFloat = isBuildingSticker ? 132 : 96
+        let hPad: CGFloat = isBuildingSticker ? 38 : 34
+        let vPad: CGFloat = isBuildingSticker ? 30 : 24
+
+        let imgWidth = ceil(borderInset * 2 + badgeTabWidth + textWidth + hPad * 2)
+        let imgHeight = ceil(max(textHeight + vPad * 2 + borderInset * 2, isBuildingSticker ? 168 : 136))
         let canvasSize = CGSize(width: imgWidth, height: imgHeight)
 
         let format = UIGraphicsImageRendererFormat()
         format.scale = 2.0
         format.opaque = false
         let renderer = UIGraphicsImageRenderer(size: canvasSize, format: format)
-        let pillImage = renderer.image { _ in
-            let rect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 3, dy: 3)
-            let path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2)
+        let cardImage = renderer.image { ctx in
+            let cg = ctx.cgContext
+            let outerRect = CGRect(origin: .zero, size: canvasSize).insetBy(dx: 6, dy: 6)
+            let cornerRad: CGFloat = isBuildingSticker ? 30 : min(44, outerRect.height * 0.42)
 
-            UIColor(red: 0.05, green: 0.07, blue: 0.13, alpha: 0.88).setFill()
-            path.fill()
+            // Crisp pure-white die-cut vinyl sticker base (guarantees contrast against dark facades AND blue sky)
+            let outerPath = UIBezierPath(roundedRect: outerRect, cornerRadius: cornerRad)
+            UIColor.white.setFill()
+            outerPath.fill()
 
-            let borderColor = isLive24h
-                ? UIColor(red: 1.0, green: 0.72, blue: 0.18, alpha: 0.95)
-                : UIColor(red: 0.0, green: 0.90, blue: 1.0, alpha: 0.90)
-            borderColor.setStroke()
-            path.lineWidth = 3.5
-            path.stroke()
+            // Inner sign face
+            let innerRect = outerRect.insetBy(dx: isBuildingSticker ? 10 : 7, dy: isBuildingSticker ? 10 : 7)
+            let innerRad = max(14, cornerRad - (isBuildingSticker ? 8 : 6))
+            let innerPath = UIBezierPath(roundedRect: innerRect, cornerRadius: innerRad)
+            darkSlate.setFill()
+            innerPath.fill()
 
-            let textOrigin = CGPoint(
-                x: (canvasSize.width - textSize.width) / 2,
-                y: (canvasSize.height - textSize.height) / 2
+            // Left signature Post brand tab clipped inside innerPath
+            cg.saveGState()
+            innerPath.addClip()
+            let tabRect = CGRect(
+                x: innerRect.minX,
+                y: innerRect.minY,
+                width: badgeTabWidth,
+                height: innerRect.height
             )
-            (text as NSString).draw(at: textOrigin, withAttributes: attributes)
+            (isLive24h ? liveAmber : postBlue).setFill()
+            UIRectFill(tabRect)
+
+            // Subtle accent divider line
+            let dividerRect = CGRect(
+                x: tabRect.maxX - 2,
+                y: innerRect.minY,
+                width: 3,
+                height: innerRect.height
+            )
+            UIColor(white: 1.0, alpha: 0.35).setFill()
+            UIRectFill(dividerRect)
+            cg.restoreGState()
+
+            // Stamp our trademark-distinct Post Folded-Note 'P' mark inside the brand tab
+            let stampSide = min(badgeTabWidth * 0.68, innerRect.height * 0.66)
+            let stampRect = CGRect(
+                x: innerRect.minX + (badgeTabWidth - stampSide) / 2,
+                y: innerRect.minY + (innerRect.height - stampSide) / 2,
+                width: stampSide,
+                height: stampSide
+            )
+            drawPostBrandStamp(
+                in: stampRect,
+                fillColor: isLive24h ? darkSlate : postBlue,
+                glyphColor: .white,
+                borderColor: .white
+            )
+
+            // Electric Post Blue / Live Amber inner hairline accent
+            let accentStroke = isLive24h ? liveAmber : postBlue
+            accentStroke.withAlphaComponent(0.9).setStroke()
+            innerPath.lineWidth = 3.0
+            innerPath.stroke()
+
+            // Draw crisp 3x 1-or-2-line caption
+            let contentLeft = innerRect.minX + badgeTabWidth + hPad
+            let contentWidth = innerRect.maxX - hPad - contentLeft
+            let textRect = CGRect(
+                x: contentLeft,
+                y: innerRect.minY + (innerRect.height - textHeight) / 2,
+                width: contentWidth,
+                height: textHeight
+            )
+            (joinedText as NSString).draw(in: textRect, withAttributes: attributes)
         }
 
         let planeWidth: CGFloat = planeHeight * (imgWidth / max(imgHeight, 1))
         let plane = SCNPlane(width: planeWidth, height: planeHeight)
-        plane.firstMaterial?.diffuse.contents = pillImage
+        plane.firstMaterial?.diffuse.contents = cardImage
         plane.firstMaterial?.lightingModel = .constant
         plane.firstMaterial?.isDoubleSided = true
-        plane.firstMaterial?.writesToDepthBuffer = false
+        plane.firstMaterial?.writesToDepthBuffer = isBuildingSticker
 
-        let labelNode = SCNNode(geometry: plane)
-        labelNode.name = nodeName
+        let signRoot = SCNNode()
+        signRoot.name = nodeName
+
+        let faceNode = SCNNode(geometry: plane)
+        faceNode.name = nodeName
+        signRoot.addChildNode(faceNode)
+
+        // Give Building Bumper Stickers subtle 3D physical plaque depth (2.6cm white vinyl edge)
+        // so angled sidewalk views read like a real mounted storefront blade sign!
+        if isBuildingSticker {
+            let plaque = SCNBox(
+                width: planeWidth * 0.985,
+                height: planeHeight * 0.97,
+                length: 0.026,
+                chamferRadius: 0.012
+            )
+            plaque.firstMaterial?.diffuse.contents = UIColor(white: 0.98, alpha: 0.96)
+            plaque.firstMaterial?.lightingModel = .constant
+            let plaqueNode = SCNNode(geometry: plaque)
+            plaqueNode.name = nodeName
+            plaqueNode.position = SCNVector3(0, 0, -0.016)
+            signRoot.addChildNode(plaqueNode)
+        }
+
+        // Upright Y-axis billboarding: angles gently toward sidewalk walkers down the block,
+        // and smoothly rotates flat against the storefront facade when standing directly in front!
         let billboard = SCNBillboardConstraint()
         billboard.freeAxes = .Y
-        labelNode.constraints = [billboard]
-        return labelNode
+        signRoot.constraints = [billboard]
+        return signRoot
     }
 
     private func attachLabelIfNeeded(
@@ -977,29 +1240,43 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
            let rNum = shapeMap["radius"] as? NSNumber {
             sphereRadius = CGFloat(rNum.doubleValue)
         }
+        let anchorSurface = (map["anchorSurface"] as? String)?.lowercased() ?? ""
         let isBalloon = sphereRadius > 1.2
+        let isBuildingSticker = !isBalloon && anchorSurface == "building"
 
         var metaEntries: [(labelNode: SCNNode, maxDistance: Float)] = []
 
-        // Sky Balloon vertical glowing tether + ground ring so close-range users (2m-20m)
-        // immediately see the vertical sky string rising from eye level up to 15m!
+        // Sky Balloon vertical glowing dual-core tether (~3x thicker!) + bold ground target ring
         if isBalloon && altitudeAboveGround >= 5.0 {
-            let accentColor = isLive24h
-                ? UIColor(red: 1.0, green: 0.72, blue: 0.18, alpha: 0.55)
-                : UIColor(red: 0.0, green: 0.90, blue: 1.0, alpha: 0.55)
+            let sheathColor = isLive24h
+                ? UIColor(red: 1.0, green: 0.722, blue: 0.180, alpha: 0.78)
+                : UIColor(red: 0.102, green: 0.549, blue: 1.0, alpha: 0.78)
 
-            let tetherHeight = max(2.0, altitudeAboveGround - Double(sphereRadius) - 0.15)
-            let cylinder = SCNCylinder(radius: 0.032, height: CGFloat(tetherHeight))
-            cylinder.firstMaterial?.diffuse.contents = accentColor
-            cylinder.firstMaterial?.lightingModel = .constant
-            cylinder.firstMaterial?.writesToDepthBuffer = false
-            let tetherNode = SCNNode(geometry: cylinder)
-            tetherNode.name = name
-            tetherNode.position = SCNVector3(0, -Float(sphereRadius) - Float(tetherHeight / 2.0), 0)
-            parentNode.addChildNode(tetherNode)
+            let tetherHeight = max(2.0, altitudeAboveGround - Double(sphereRadius) - 0.12)
+            let tetherCenterY = -Float(sphereRadius) - Float(tetherHeight / 2.0)
 
-            let ring = SCNTorus(ringRadius: 0.30, pipeRadius: 0.03)
-            ring.firstMaterial?.diffuse.contents = accentColor.withAlphaComponent(0.75)
+            // Outer Electric Post Blue / Amber glow sheath (3x thicker: 0.098m radius = ~20cm beam)
+            let outerCylinder = SCNCylinder(radius: 0.098, height: CGFloat(tetherHeight))
+            outerCylinder.firstMaterial?.diffuse.contents = sheathColor
+            outerCylinder.firstMaterial?.lightingModel = .constant
+            outerCylinder.firstMaterial?.writesToDepthBuffer = false
+            let outerTetherNode = SCNNode(geometry: outerCylinder)
+            outerTetherNode.name = name
+            outerTetherNode.position = SCNVector3(0, tetherCenterY, 0)
+            parentNode.addChildNode(outerTetherNode)
+
+            // Crisp pure-white inner luminous core (0.040m radius) so the string pops day & night
+            let coreCylinder = SCNCylinder(radius: 0.040, height: CGFloat(tetherHeight))
+            coreCylinder.firstMaterial?.diffuse.contents = UIColor(white: 1.0, alpha: 0.94)
+            coreCylinder.firstMaterial?.lightingModel = .constant
+            coreCylinder.firstMaterial?.writesToDepthBuffer = false
+            let coreTetherNode = SCNNode(geometry: coreCylinder)
+            coreTetherNode.name = name
+            coreTetherNode.position = SCNVector3(0, tetherCenterY, 0)
+            parentNode.addChildNode(coreTetherNode)
+
+            let ring = SCNTorus(ringRadius: 0.52, pipeRadius: 0.055)
+            ring.firstMaterial?.diffuse.contents = sheathColor.withAlphaComponent(0.90)
             ring.firstMaterial?.lightingModel = .constant
             let ringNode = SCNNode(geometry: ring)
             ringNode.name = name
@@ -1007,50 +1284,67 @@ public class ArCoreViewIOS: NSObject, FlutterPlatformView, ARSessionDelegate, AR
             parentNode.addChildNode(ringNode)
         }
 
-        guard let rawLabel = map["label"] as? String else {
+        let rawInput = (map["label"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let effectiveText = rawInput.isEmpty ? (isBuildingSticker ? "Post" : "") : rawInput
+        guard !effectiveText.isEmpty else {
             if !metaEntries.isEmpty { labelMetaMap[name] = metaEntries }
             return
         }
-        let trimmed = rawLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            if !metaEntries.isEmpty { labelMetaMap[name] = metaEntries }
-            return
-        }
 
-        let maxChars = 34
-        let cleanText = trimmed.count > maxChars
-            ? String(trimmed.prefix(maxChars - 1)) + "…"
-            : trimmed
-        let displayText = isLive24h ? "⚡ \(cleanText)" : cleanText
+        let displayText = isLive24h ? "⚡ \(effectiveText)" : effectiveText
+        let lineCount = wrapSignLines(displayText).count
 
-        // 1. Primary floating caption pill directly above the sphere / sky balloon
-        let planeHeight: CGFloat = isBalloon ? 0.85 : 0.26
-        let skyLabelNode = makePillPlaneNode(
-            text: displayText,
-            nodeName: name,
-            isLive24h: isLive24h,
-            planeHeight: planeHeight
-        )
-        skyLabelNode.position = SCNVector3(0, Float(sphereRadius) + Float(planeHeight * 0.65) + 0.15, 0)
-        parentNode.addChildNode(skyLabelNode)
-        let maxVisibleDist: Float = isBalloon ? 140.0 : 28.0
-        metaEntries.append((labelNode: skyLabelNode, maxDistance: maxVisibleDist))
-
-        // 2. Eye-level tether signpost (1.35m above ground) for Sky Balloons when standing <= 22m away
-        if isBalloon && altitudeAboveGround >= 5.0 {
-            let shortChars = 24
-            let shortClean = trimmed.count > shortChars
-                ? String(trimmed.prefix(shortChars - 1)) + "…"
-                : trimmed
-            let eyeLabelNode = makePillPlaneNode(
-                text: "🎈 ↑ \(shortClean)",
+        if isBuildingSticker {
+            // Building Bumper Sticker replaces the sphere directly at (0, 0, 0) on the facade!
+            // Compact 0.48m-0.62m height up close (<8m) + automatic 2.25x distance boost down the block!
+            let stickerHeight: CGFloat = lineCount > 1 ? 0.62 : 0.48
+            let stickerNode = makePillPlaneNode(
+                text: displayText,
                 nodeName: name,
                 isLive24h: isLive24h,
-                planeHeight: 0.23
+                isBuildingSticker: true,
+                planeHeight: stickerHeight
             )
-            eyeLabelNode.position = SCNVector3(0, Float(1.35 - altitudeAboveGround), 0)
-            parentNode.addChildNode(eyeLabelNode)
-            metaEntries.append((labelNode: eyeLabelNode, maxDistance: 22.0))
+            stickerNode.position = SCNVector3(0, 0, 0)
+            parentNode.addChildNode(stickerNode)
+            metaEntries.append((labelNode: stickerNode, maxDistance: 58.0))
+        } else {
+            // 1. Primary 3x floating sign card directly above Ground Pin orb or Sky Balloon
+            let planeHeight: CGFloat
+            if isBalloon {
+                planeHeight = lineCount > 1 ? 2.55 : 2.15
+            } else {
+                planeHeight = lineCount > 1 ? 0.58 : 0.46
+            }
+            let skyLabelNode = makePillPlaneNode(
+                text: displayText,
+                nodeName: name,
+                isLive24h: isLive24h,
+                isBuildingSticker: false,
+                planeHeight: planeHeight
+            )
+            skyLabelNode.position = SCNVector3(0, Float(sphereRadius) + Float(planeHeight * 0.58) + 0.16, 0)
+            parentNode.addChildNode(skyLabelNode)
+            let maxVisibleDist: Float = isBalloon ? 150.0 : 55.0
+            metaEntries.append((labelNode: skyLabelNode, maxDistance: maxVisibleDist))
+
+            // 2. Eye-level tether signpost (1.35m above ground) for Sky Balloons when <= 28m away
+            if isBalloon && altitudeAboveGround >= 5.0 {
+                let shortChars = 26
+                let shortClean = effectiveText.count > shortChars
+                    ? String(effectiveText.prefix(shortChars - 1)) + "…"
+                    : effectiveText
+                let eyeLabelNode = makePillPlaneNode(
+                    text: "🎈 ↑ \(shortClean)",
+                    nodeName: name,
+                    isLive24h: isLive24h,
+                    isBuildingSticker: false,
+                    planeHeight: 0.46
+                )
+                eyeLabelNode.position = SCNVector3(0, Float(1.35 - altitudeAboveGround), 0)
+                parentNode.addChildNode(eyeLabelNode)
+                metaEntries.append((labelNode: eyeLabelNode, maxDistance: 28.0))
+            }
         }
 
         labelMetaMap[name] = metaEntries

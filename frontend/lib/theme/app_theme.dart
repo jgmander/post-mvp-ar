@@ -7,15 +7,18 @@ class AppColors {
   AppColors._();
 
   // ── AR Post Colors ──────────────────────────────────────────────
-  /// Teal: own posts (dropped by the current user)
-  static const Color ownPost = Color(0xFF00E5FF);
+  /// Signature Electric Post Blue: own posts & brand badge
+  static const Color ownPost = Color(0xFF1A8CFF);
 
-  /// Violet: posts from other users
-  static const Color othersPost = Color(0xFFB388FF);
+  /// Electric Ultramarine-Violet: posts from other users
+  static const Color othersPost = Color(0xFF7B61FF);
 
   // ── UI Accent ───────────────────────────────────────────────────
-  /// Primary cyan accent — ghost pin, borders, badges
-  static const Color accent = Color(0xFF00E5FF);
+  /// Luminous Electric Post Blue accent — reticle, shutter, badges
+  static const Color accent = Color(0xFF2997FF);
+
+  /// Crisp vinyl white — sticker borders & sky-contrast rims
+  static const Color vinylWhite = Color(0xFFFFFFFF);
 
   /// Warm amber accent for 24h Live ephemeral moments
   static const Color liveAmber = Color(0xFFFFB82E);

@@ -4,7 +4,11 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
@@ -16,6 +20,8 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import com.difrancescogianmarco.arcore_flutter_plugin.flutter_models.FlutterArCoreHitTestResult
@@ -69,7 +75,7 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
     private var lastCenterSummaryKey: String = ""
     private var latestCenterTarget: HashMap<String, Any>? = null
     private var frameCounter: Int = 0
-    private val labelNodeMeta = HashMap<String, Pair<Node, Float>>()
+    private val labelNodeMeta = HashMap<String, MutableList<Pair<Node, Float>>>()
 
     //AUGMENTEDFACE
     private var faceRegionsRenderable: ModelRenderable? = null
@@ -120,26 +126,31 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                     }
                 }
 
-                // Billboard + proximity LOD for floating 3D caption pills
+                // Billboard + proximity LOD for floating 3D caption cards & building stickers
                 val camPos = view.scene.camera.worldPosition
-                for ((_, pair) in labelNodeMeta) {
-                    val labelNode = pair.first
-                    val maxDist = pair.second
-                    val parent = labelNode.parent
-                    if (parent == null) continue
-                    val nodePos = parent.worldPosition
-                    val dx = camPos.x - nodePos.x
-                    val dy = camPos.y - nodePos.y
-                    val dz = camPos.z - nodePos.z
-                    val dist = Math.sqrt((dx * dx + dy * dy + dz * dz).toDouble()).toFloat()
-                    val shouldShow = dist <= maxDist
-                    if (labelNode.isEnabled != shouldShow) {
-                        labelNode.isEnabled = shouldShow
-                    }
-                    if (shouldShow) {
-                        val lookVec = Vector3(dx, 0f, dz)
-                        if (lookVec.length() > 0.01f) {
-                            labelNode.worldRotation = Quaternion.lookRotation(lookVec.normalized(), Vector3.up())
+                for ((_, entries) in labelNodeMeta) {
+                    for (pair in entries) {
+                        val labelNode = pair.first
+                        val maxDist = pair.second
+                        val parent = labelNode.parent ?: continue
+                        val nodePos = parent.worldPosition
+                        val dx = camPos.x - nodePos.x
+                        val dy = camPos.y - nodePos.y
+                        val dz = camPos.z - nodePos.z
+                        val dist = Math.sqrt((dx * dx + dy * dy + dz * dz).toDouble()).toFloat()
+                        val shouldShow = dist <= maxDist
+                        if (labelNode.isEnabled != shouldShow) {
+                            labelNode.isEnabled = shouldShow
+                        }
+                        if (shouldShow) {
+                            val lookVec = Vector3(dx, 0f, dz)
+                            if (lookVec.length() > 0.01f) {
+                                labelNode.worldRotation = Quaternion.lookRotation(lookVec.normalized(), Vector3.up())
+                            }
+                            if (maxDist < 100.0f) {
+                                val boost = Math.min(2.25f, Math.max(1.0f, 1.0f + (dist - 8.0f) * 0.042f))
+                                labelNode.localScale = Vector3(boost, boost, boost)
+                            }
                         }
                     }
                 }
@@ -504,10 +515,21 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                     ?.setOnTouchListener { hitTestResult: HitTestResult, event: MotionEvent? ->
 
                         if (hitTestResult.node != null) {
-                            debugLog(" onNodeTap " + hitTestResult.node?.name)
-                            debugLog(hitTestResult.node?.localPosition.toString())
-                            debugLog(hitTestResult.node?.worldPosition.toString())
-                            methodChannel.invokeMethod("onNodeTap", hitTestResult.node?.name)
+                            if (event?.action == MotionEvent.ACTION_UP) {
+                                var cur: Node? = hitTestResult.node
+                                var resolvedName: String? = null
+                                while (cur != null) {
+                                    if (!cur.name.isNullOrEmpty()) {
+                                        resolvedName = cur.name
+                                        break
+                                    }
+                                    cur = cur.parent as? Node
+                                }
+                                if (resolvedName != null) {
+                                    debugLog(" onNodeTap $resolvedName")
+                                    methodChannel.invokeMethod("onNodeTap", resolvedName)
+                                }
+                            }
                             return@setOnTouchListener true
                         }
                         return@setOnTouchListener event?.let { gestureDetector.onTouchEvent(it) } ?: false
@@ -717,82 +739,467 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
         }
     }
 
+    private fun wrapSignLines(raw: String, maxLineChars: Int = 16, maxTotalChars: Int = 46): List<String> {
+        val collapsed = raw.replace("\n", " ").trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+        if (collapsed.isEmpty()) return emptyList()
+        val capped = if (collapsed.length > maxTotalChars) {
+            collapsed.substring(0, maxTotalChars - 1).trimEnd() + "…"
+        } else {
+            collapsed
+        }
+        if (capped.length <= maxLineChars) return listOf(capped)
+
+        val words = capped.split(" ")
+        if (words.size <= 1) {
+            val mid = Math.min(maxLineChars, capped.length)
+            return listOf(capped.substring(0, mid), capped.substring(mid))
+        }
+        var line1 = ""
+        var splitIdx = 0
+        val target = capped.length / 2
+        for ((idx, w) in words.withIndex()) {
+            val candidate = if (line1.isEmpty()) w else "$line1 $w"
+            if (candidate.length <= Math.max(maxLineChars, target + 4) && idx < words.size - 1) {
+                line1 = candidate
+                splitIdx = idx + 1
+            } else {
+                if (line1.isEmpty()) {
+                    line1 = w
+                    splitIdx = 1
+                }
+                break
+            }
+        }
+        val remainder = words.subList(splitIdx, words.size).joinToString(" ")
+        if (remainder.isEmpty()) return listOf(line1)
+        val cappedLine2 = if (remainder.length > maxLineChars + 4) {
+            remainder.substring(0, maxLineChars + 3).trimEnd() + "…"
+        } else {
+            remainder
+        }
+        return listOf(line1, cappedLine2)
+    }
+
+    private fun drawPostBrandStamp(
+        canvas: Canvas,
+        rect: RectF,
+        fillColor: Int,
+        glyphColor: Int,
+        borderColor: Int
+    ) {
+        val w = rect.width()
+        val h = rect.height()
+        val ox = rect.left
+        val oy = rect.top
+
+        val left = ox + w * 0.12f
+        val right = ox + w * 0.88f
+        val top = oy + h * 0.08f
+        val bottom = oy + h * 0.79f
+        val r = w * 0.15f
+        val fold = w * 0.24f
+
+        val note = Path().apply {
+            moveTo(left + r, top)
+            lineTo(right - fold, top)
+            lineTo(right, top + fold)
+            lineTo(right, bottom - r)
+            quadTo(right, bottom, right - r, bottom)
+            lineTo(ox + w * 0.60f, bottom)
+            lineTo(ox + w * 0.50f, oy + h * 0.95f)
+            lineTo(ox + w * 0.40f, bottom)
+            lineTo(left + r, bottom)
+            quadTo(left, bottom, left, bottom - r)
+            lineTo(left, top + r)
+            quadTo(left, top, left + r, top)
+            close()
+        }
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = fillColor
+        }
+        canvas.drawPath(note, fillPaint)
+
+        val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = borderColor
+            strokeWidth = Math.max(4f, w * 0.055f)
+            strokeJoin = Paint.Join.ROUND
+        }
+        canvas.drawPath(note, borderPaint)
+
+        // Folded top-right sticky-note dog-ear flap
+        val flap = Path().apply {
+            moveTo(right - fold, top)
+            lineTo(right - fold, top + fold * 0.78f)
+            quadTo(right - fold, top + fold, right - fold * 0.78f, top + fold)
+            lineTo(right, top + fold)
+            close()
+        }
+        val flapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = glyphColor
+            alpha = 235
+        }
+        canvas.drawPath(flap, flapPaint)
+
+        // Bold geometric 'P' monogram
+        val stemX = ox + w * 0.36f
+        val stemTop = oy + h * 0.27f
+        val stemBottom = oy + h * 0.63f
+        val bowlMidY = oy + h * 0.46f
+        val bowlRadius = (bowlMidY - stemTop) * 0.5f
+        val bowlCenterX = (ox + w * 0.57f) - bowlRadius
+
+        val pPath = Path().apply {
+            moveTo(stemX, stemBottom)
+            lineTo(stemX, stemTop)
+            lineTo(bowlCenterX, stemTop)
+            arcTo(
+                RectF(bowlCenterX - bowlRadius, stemTop, bowlCenterX + bowlRadius, bowlMidY),
+                -90f,
+                180f,
+                false
+            )
+            lineTo(stemX, bowlMidY)
+        }
+        val pPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = glyphColor
+            strokeWidth = Math.max(6f, w * 0.108f)
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        canvas.drawPath(pPath, pPaint)
+    }
+
+    private fun renderSignCardBitmap(
+        lines: List<String>,
+        isLive24h: Boolean,
+        isBuildingSticker: Boolean
+    ): Bitmap {
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            textSize = if (isBuildingSticker) 96f else 86f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isSubpixelText = true
+        }
+        val fm = textPaint.fontMetrics
+        val lineHeight = (fm.descent - fm.ascent) + 12f
+        var maxTextWidth = 0f
+        for (line in lines) {
+            maxTextWidth = Math.max(maxTextWidth, textPaint.measureText(line))
+        }
+        val totalTextHeight = lineHeight * lines.size - 12f
+
+        val postBlue = Color.parseColor("#1A8CFF")
+        val liveAmber = Color.parseColor("#FFB82E")
+        val darkSlate = Color.parseColor("#F50B1326")
+
+        val borderInset = 18f
+        val badgeTabWidth = if (isBuildingSticker) 224f else 168f
+        val hPad = if (isBuildingSticker) 64f else 56f
+        val vPad = if (isBuildingSticker) 48f else 40f
+
+        val bmpW = Math.ceil((borderInset * 2f + badgeTabWidth + maxTextWidth + hPad * 2f).toDouble()).toInt()
+        val bmpH = Math.max(
+            Math.ceil((totalTextHeight + vPad * 2f + borderInset * 2f).toDouble()).toInt(),
+            if (isBuildingSticker) 280 else 232
+        )
+
+        val bmp = Bitmap.createBitmap(bmpW, bmpH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+
+        val outerRect = RectF(10f, 10f, bmpW - 10f, bmpH - 10f)
+        val cornerRad = if (isBuildingSticker) 52f else Math.min(76f, outerRect.height() * 0.42f)
+
+        // Crisp pure-white die-cut vinyl sticker base
+        val whitePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.WHITE
+        }
+        canvas.drawRoundRect(outerRect, cornerRad, cornerRad, whitePaint)
+
+        val insetPx = if (isBuildingSticker) 17f else 12f
+        val innerRect = RectF(
+            outerRect.left + insetPx,
+            outerRect.top + insetPx,
+            outerRect.right - insetPx,
+            outerRect.bottom - insetPx
+        )
+        val innerRad = Math.max(24f, cornerRad - (insetPx * 0.8f))
+        val innerPath = Path().apply {
+            addRoundRect(innerRect, innerRad, innerRad, Path.Direction.CW)
+        }
+
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = darkSlate
+        }
+        canvas.drawPath(innerPath, bgPaint)
+
+        // Clip left signature brand tab inside innerPath
+        canvas.save()
+        canvas.clipPath(innerPath)
+        val tabPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = if (isLive24h) liveAmber else postBlue
+        }
+        val tabRect = RectF(innerRect.left, innerRect.top, innerRect.left + badgeTabWidth, innerRect.bottom)
+        canvas.drawRect(tabRect, tabPaint)
+
+        val divPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.argb(90, 255, 255, 255)
+        }
+        canvas.drawRect(tabRect.right - 4f, innerRect.top, tabRect.right, innerRect.bottom, divPaint)
+        canvas.restore()
+
+        // Stamp custom trademark-distinct Post Folded-Note 'P' mark
+        val stampSide = Math.min(badgeTabWidth * 0.68f, innerRect.height() * 0.66f)
+        val stampRect = RectF(
+            innerRect.left + (badgeTabWidth - stampSide) / 2f,
+            innerRect.top + (innerRect.height() - stampSide) / 2f,
+            innerRect.left + (badgeTabWidth + stampSide) / 2f,
+            innerRect.top + (innerRect.height() + stampSide) / 2f
+        )
+        drawPostBrandStamp(
+            canvas,
+            stampRect,
+            if (isLive24h) Color.parseColor("#0B1326") else postBlue,
+            Color.WHITE,
+            Color.WHITE
+        )
+
+        val accentStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = if (isLive24h) liveAmber else postBlue
+            strokeWidth = 5f
+        }
+        canvas.drawPath(innerPath, accentStroke)
+
+        // Draw 1-or-2-line bold caption
+        val contentLeft = innerRect.left + badgeTabWidth + hPad
+        val contentWidth = innerRect.right - hPad - contentLeft
+        val startY = innerRect.centerY() - (totalTextHeight / 2f) - fm.ascent
+        for ((idx, line) in lines.withIndex()) {
+            val lineW = textPaint.measureText(line)
+            val x = if (isBuildingSticker) contentLeft else contentLeft + Math.max(0f, (contentWidth - lineW) / 2f)
+            val y = startY + idx * lineHeight
+            canvas.drawText(line, x, y, textPaint)
+        }
+
+        return bmp
+    }
+
+    private fun buildSignNodeAndAttach(
+        parentNode: Node,
+        postName: String,
+        displayText: String,
+        isLive24h: Boolean,
+        isBuildingSticker: Boolean,
+        planeHeightMeters: Float,
+        localYOffset: Float,
+        maxVisibleDist: Float
+    ) {
+        val lines = wrapSignLines(displayText)
+        if (lines.isEmpty()) return
+        val bmp = renderSignCardBitmap(lines, isLive24h, isBuildingSticker)
+        val aspect = bmp.width.toFloat() / Math.max(1, bmp.height).toFloat()
+        val planeWidthMeters = planeHeightMeters * aspect
+
+        // Sceneform default DpToMetersViewSizer uses 250dp = 1.0 meter in 3D space
+        val density = activity.resources.displayMetrics.density
+        val viewHeightPx = Math.max(40, Math.round(planeHeightMeters * 250f * density))
+        val viewWidthPx = Math.max(80, Math.round(planeWidthMeters * 250f * density))
+
+        val imgView = ImageView(activity).apply {
+            layoutParams = ViewGroup.LayoutParams(viewWidthPx, viewHeightPx)
+            scaleType = ImageView.ScaleType.FIT_XY
+            setImageBitmap(bmp)
+        }
+
+        ViewRenderable.builder()
+            .setView(activity, imgView)
+            .build()
+            .thenAccept { viewRenderable ->
+                viewRenderable.isShadowCaster = false
+                viewRenderable.isShadowReceiver = false
+                val signRoot = Node()
+                signRoot.name = postName
+                signRoot.localPosition = Vector3(0f, localYOffset, 0f)
+
+                val faceNode = Node()
+                faceNode.name = postName
+                faceNode.renderable = viewRenderable
+                signRoot.addChild(faceNode)
+
+                // Add subtle 2.6cm white 3D plaque backing on Building Bumper Stickers
+                if (isBuildingSticker) {
+                    val plaqueColor = com.google.ar.sceneform.rendering.Color(0.98f, 0.98f, 1.0f, 1.0f)
+                    MaterialFactory.makeOpaqueWithColor(activity.applicationContext, plaqueColor)
+                        .thenAccept { plaqueMat ->
+                            val plaque = ShapeFactory.makeCube(
+                                Vector3(planeWidthMeters * 0.985f, planeHeightMeters * 0.97f, 0.026f),
+                                Vector3(0f, 0f, -0.016f),
+                                plaqueMat
+                            )
+                            plaque.isShadowCaster = false
+                            plaque.isShadowReceiver = false
+                            val plaqueNode = Node()
+                            plaqueNode.name = postName
+                            plaqueNode.renderable = plaque
+                            signRoot.addChild(plaqueNode)
+                        }
+                        .exceptionally { null }
+                }
+
+                parentNode.addChild(signRoot)
+                val list = labelNodeMeta.getOrPut(postName) { mutableListOf() }
+                list.add(Pair(signRoot, maxVisibleDist))
+            }
+            .exceptionally { null }
+    }
+
     private fun attachLabelIfNeeded(parentNode: Node, postName: String, map: HashMap<String, Any>) {
         val isLive24h = (map["isLive24h"] as? Boolean) ?: false
         val shapeMap = map["shape"] as? HashMap<*, *>
         val sphereRadius = ((shapeMap?.get("radius") as? Number)?.toFloat()) ?: 0.6f
         val altAboveGround = ((map["altitude"] as? Number)?.toFloat()) ?: 0f
+        val anchorSurface = ((map["anchorSurface"] as? String) ?: "").lowercase()
         val isBalloon = sphereRadius > 1.2f
+        val isBuildingSticker = !isBalloon && anchorSurface == "building"
+
+        if (isBalloon) {
+            // Crisp pure-white Sky-Contrast Halo Band around Sky Balloons so Electric Post Blue
+            // stands out sharply against a bright daytime California blue sky!
+            val haloColor = com.google.ar.sceneform.rendering.Color(1.0f, 1.0f, 1.0f, 0.95f)
+            MaterialFactory.makeTransparentWithColor(activity.applicationContext, haloColor)
+                .thenAccept { haloMat ->
+                    val band = ShapeFactory.makeCylinder(
+                        sphereRadius * 1.045f,
+                        0.15f,
+                        Vector3(0f, 0f, 0f),
+                        haloMat
+                    )
+                    band.isShadowCaster = false
+                    band.isShadowReceiver = false
+                    val bandNode = Node()
+                    bandNode.name = postName
+                    bandNode.renderable = band
+                    bandNode.localRotation = Quaternion.axisAngle(Vector3(1f, 0f, 0.25f).normalized(), 14f)
+                    parentNode.addChild(bandNode)
+                }
+                .exceptionally { null }
+        }
 
         if (isBalloon && altAboveGround >= 5.0f) {
-            val tetherHeight = Math.max(2.0f, altAboveGround - sphereRadius - 0.15f)
-            val sfColor = if (isLive24h) {
-                com.google.ar.sceneform.rendering.Color(1.0f, 0.72f, 0.18f, 0.55f)
+            val tetherHeight = Math.max(2.0f, altAboveGround - sphereRadius - 0.12f)
+            val tetherCenter = Vector3(0f, -sphereRadius - tetherHeight / 2.0f, 0f)
+            val sheathColor = if (isLive24h) {
+                com.google.ar.sceneform.rendering.Color(1.0f, 0.722f, 0.18f, 0.78f)
             } else {
-                com.google.ar.sceneform.rendering.Color(0.0f, 0.90f, 1.0f, 0.55f)
+                com.google.ar.sceneform.rendering.Color(0.102f, 0.549f, 1.0f, 0.78f)
             }
-            MaterialFactory.makeTransparentWithColor(activity.applicationContext, sfColor)
+            // 1. Outer 3x thicker glowing sheath (0.098m radius = ~20cm light beam)
+            MaterialFactory.makeTransparentWithColor(activity.applicationContext, sheathColor)
                 .thenAccept { mat ->
-                    val cyl = ShapeFactory.makeCylinder(
-                        0.032f,
-                        tetherHeight,
-                        Vector3(0f, -sphereRadius - tetherHeight / 2.0f, 0f),
-                        mat
-                    )
+                    val cyl = ShapeFactory.makeCylinder(0.098f, tetherHeight, tetherCenter, mat)
                     cyl.isShadowCaster = false
                     cyl.isShadowReceiver = false
                     val tetherNode = Node()
                     tetherNode.name = postName
                     tetherNode.renderable = cyl
                     parentNode.addChild(tetherNode)
+
+                    val groundDisc = ShapeFactory.makeCylinder(
+                        0.52f,
+                        0.055f,
+                        Vector3(0f, -altAboveGround + 0.08f, 0f),
+                        mat
+                    )
+                    groundDisc.isShadowCaster = false
+                    groundDisc.isShadowReceiver = false
+                    val discNode = Node()
+                    discNode.name = postName
+                    discNode.renderable = groundDisc
+                    parentNode.addChild(discNode)
+                }
+                .exceptionally { null }
+
+            // 2. Crisp pure-white inner luminous core (0.040m radius)
+            val coreColor = com.google.ar.sceneform.rendering.Color(1.0f, 1.0f, 1.0f, 0.94f)
+            MaterialFactory.makeTransparentWithColor(activity.applicationContext, coreColor)
+                .thenAccept { coreMat ->
+                    val coreCyl = ShapeFactory.makeCylinder(0.040f, tetherHeight, tetherCenter, coreMat)
+                    coreCyl.isShadowCaster = false
+                    coreCyl.isShadowReceiver = false
+                    val coreNode = Node()
+                    coreNode.name = postName
+                    coreNode.renderable = coreCyl
+                    parentNode.addChild(coreNode)
                 }
                 .exceptionally { null }
         }
 
-        val rawLabel = (map["label"] as? String)?.trim() ?: return
-        if (rawLabel.isEmpty()) return
+        val rawInput = (map["label"] as? String)?.trim() ?: ""
+        val effectiveText = if (rawInput.isEmpty()) (if (isBuildingSticker) "Post" else "") else rawInput
+        if (effectiveText.isEmpty()) return
 
-        val cleanText = if (rawLabel.length > 34) rawLabel.substring(0, 33) + "…" else rawLabel
-        val displayText = if (isLive24h) "⚡ $cleanText" else cleanText
+        val displayText = if (isLive24h) "⚡ $effectiveText" else effectiveText
+        val lineCount = wrapSignLines(displayText).size
 
-        val density = activity.resources.displayMetrics.density
-        val textView = TextView(activity).apply {
-            text = displayText
-            setTextColor(Color.parseColor("#F0F4FF"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (isBalloon) 18f else 13f)
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-            gravity = Gravity.CENTER
-            val hPad = (14 * density).toInt()
-            val vPad = (7 * density).toInt()
-            setPadding(hPad, vPad, hPad, vPad)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.RECTANGLE
-                cornerRadius = 999f
-                setColor(Color.parseColor("#E00D1220"))
-                val strokeColor = if (isLive24h) Color.parseColor("#FFB82E") else Color.parseColor("#00E5FF")
-                setStroke((2 * density).toInt(), strokeColor)
+        if (isBuildingSticker) {
+            val stickerHeight = if (lineCount > 1) 0.62f else 0.48f
+            buildSignNodeAndAttach(
+                parentNode = parentNode,
+                postName = postName,
+                displayText = displayText,
+                isLive24h = isLive24h,
+                isBuildingSticker = true,
+                planeHeightMeters = stickerHeight,
+                localYOffset = 0f,
+                maxVisibleDist = 58.0f
+            )
+        } else {
+            val cardHeight = if (isBalloon) {
+                if (lineCount > 1) 2.55f else 2.15f
+            } else {
+                if (lineCount > 1) 0.58f else 0.46f
+            }
+            val yOffset = sphereRadius + cardHeight * 0.58f + 0.16f
+            val maxDist = if (isBalloon) 150.0f else 55.0f
+            buildSignNodeAndAttach(
+                parentNode = parentNode,
+                postName = postName,
+                displayText = displayText,
+                isLive24h = isLive24h,
+                isBuildingSticker = false,
+                planeHeightMeters = cardHeight,
+                localYOffset = yOffset,
+                maxVisibleDist = maxDist
+            )
+
+            // Eye-level tether signpost (1.35m above ground) for Sky Balloons when <= 28m away
+            if (isBalloon && altAboveGround >= 5.0f) {
+                val shortClean = if (effectiveText.length > 26) {
+                    effectiveText.substring(0, 25) + "…"
+                } else {
+                    effectiveText
+                }
+                buildSignNodeAndAttach(
+                    parentNode = parentNode,
+                    postName = postName,
+                    displayText = "🎈 ↑ $shortClean",
+                    isLive24h = isLive24h,
+                    isBuildingSticker = false,
+                    planeHeightMeters = 0.46f,
+                    localYOffset = 1.35f - altAboveGround,
+                    maxVisibleDist = 28.0f
+                )
             }
         }
-
-        ViewRenderable.builder()
-            .setView(activity, textView)
-            .build()
-            .thenAccept { viewRenderable ->
-                viewRenderable.isShadowCaster = false
-                viewRenderable.isShadowReceiver = false
-                val labelNode = Node()
-                labelNode.name = postName
-                labelNode.renderable = viewRenderable
-                labelNode.localPosition = Vector3(0f, sphereRadius + (if (isBalloon) 1.35f else 0.45f), 0f)
-                val scaleFactor = if (isBalloon) 2.4f else 1.0f
-                labelNode.localScale = Vector3(scaleFactor, scaleFactor, scaleFactor)
-                parentNode.addChild(labelNode)
-                val maxVisibleDist = if (isBalloon) 140.0f else 28.0f
-                labelNodeMeta[postName] = Pair(labelNode, maxVisibleDist)
-            }
-            .exceptionally { null }
     }
 
     private fun getGeospatialPose(call: MethodCall, result: MethodChannel.Result) {
@@ -875,10 +1282,13 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                 ) { anchor, state ->
                     if (state.name == "SUCCESS" && anchor != null) {
                         activity.runOnUiThread {
+                            val shapeMap = map["shape"] as? HashMap<*, *>
+                            val rad = ((shapeMap?.get("radius") as? Number)?.toFloat()) ?: 0.6f
+                            val isBldgSticker = rad <= 1.2f && ((map["anchorSurface"] as? String) ?: "").lowercase() == "building"
                             val anchorNode = AnchorNode(anchor)
                             anchorNode.setParent(arSceneView?.scene)
                             anchorNode.name = flutterArCoreNode.name
-                            anchorNode.renderable = renderable
+                            anchorNode.renderable = if (isBldgSticker) null else renderable
                             attachLabelIfNeeded(anchorNode, flutterArCoreNode.name, map)
                             attachNodeToParent(anchorNode, flutterArCoreNode.parentNodeName)
                             methodChannel.invokeMethod("onRooftopAnchorResolved", mapOf("name" to flutterArCoreNode.name, "success" to true))
@@ -921,10 +1331,13 @@ class ArCoreView(val activity: Activity, context: Context, messenger: BinaryMess
                 ) { anchor, state ->
                     if (state.name == "SUCCESS" && anchor != null) {
                         activity.runOnUiThread {
+                            val shapeMap = map["shape"] as? HashMap<*, *>
+                            val rad = ((shapeMap?.get("radius") as? Number)?.toFloat()) ?: 0.6f
+                            val isBldgSticker = rad <= 1.2f && ((map["anchorSurface"] as? String) ?: "").lowercase() == "building"
                             val anchorNode = AnchorNode(anchor)
                             anchorNode.setParent(arSceneView?.scene)
                             anchorNode.name = flutterArCoreNode.name
-                            anchorNode.renderable = renderable
+                            anchorNode.renderable = if (isBldgSticker) null else renderable
                             attachLabelIfNeeded(anchorNode, flutterArCoreNode.name, map)
                             attachNodeToParent(anchorNode, flutterArCoreNode.parentNodeName)
                             methodChannel.invokeMethod("onTerrainAnchorResolved", mapOf("name" to flutterArCoreNode.name, "success" to true, "state" to state.name))

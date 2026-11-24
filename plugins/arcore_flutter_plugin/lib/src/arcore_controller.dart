@@ -273,7 +273,7 @@ class ArCoreController {
   }
 
   Future<void> resolveAnchorOnRooftopAsync(ArCoreNode node, double latitude, double longitude, double altitude,
-      {String? parentNodeName, String? label, bool isLive24h = false}) {
+      {String? parentNodeName, String? label, bool isLive24h = false, String? anchorSurface}) {
     final params = _addParentNodeNameToParams(node.toMap(), parentNodeName);
     if (params != null) {
       params['latitude'] = latitude;
@@ -281,13 +281,16 @@ class ArCoreController {
       params['altitude'] = altitude; // Above roof
       if (label != null && label.isNotEmpty) params['label'] = label;
       params['isLive24h'] = isLive24h;
+      if (anchorSurface != null && anchorSurface.isNotEmpty) {
+        params['anchorSurface'] = anchorSurface;
+      }
     }
     _addListeners(node);
     return _channel.invokeMethod('resolveAnchorOnRooftopAsync', params);
   }
 
   Future<void> resolveAnchorOnTerrainAsync(ArCoreNode node, double latitude, double longitude, double altitude,
-      {String? parentNodeName, String? label, bool isLive24h = false}) {
+      {String? parentNodeName, String? label, bool isLive24h = false, String? anchorSurface}) {
     final params = _addParentNodeNameToParams(node.toMap(), parentNodeName);
     if (params != null) {
       params['latitude'] = latitude;
@@ -295,6 +298,9 @@ class ArCoreController {
       params['altitude'] = altitude; // Above terrain
       if (label != null && label.isNotEmpty) params['label'] = label;
       params['isLive24h'] = isLive24h;
+      if (anchorSurface != null && anchorSurface.isNotEmpty) {
+        params['anchorSurface'] = anchorSurface;
+      }
     }
     _addListeners(node);
     return _channel.invokeMethod('resolveAnchorOnTerrainAsync', params);
